@@ -2,10 +2,10 @@ from typing import List
 
 import torch
 from clearml import Task
-
-from models.med_mnist_base import MedMNISTBase
 from torch import nn
+
 from models.flex_modules import FlexFormer
+from models.med_mnist_base import MedMNISTBase
 
 torch._inductor.config.realize_opcount_threshold = 500
 torch._dynamo.config.cache_size_limit = 128
@@ -35,14 +35,17 @@ class PoolWithChannelExpansion(nn.Module):
 
 
 class FlexNetAvgPool(MedMNISTBase):
-    def __init__(self, dataset_name: str, n_heads: int = 4, ff_dim_scale:int= 2, patch_size: List[int] = [224, 224], device: str = 'cuda'):
+    def __init__(self, dataset_name: str, n_heads: int = 4, ff_dim_scale: int = 2, patch_size: List[int] = [224, 224],
+                 device: str = 'cuda', pos_prior='coord', pe_learnable=False):
         super().__init__(dataset_name)
         patch_size = torch.tensor(patch_size)
+        flexformer_kwargs = dict(nhead=n_heads, device=device, dim_ff_scale=ff_dim_scale, pos_prior=pos_prior,
+                                 pe_learnable=pe_learnable)
 
         n_out_channels = 64
         self.first_layer = nn.Sequential(
             PoolWithChannelExpansion(patch_size.clone(), self.n_channels, n_out_channels, 7, 2, 3),
-            FlexFormer(patch_size.clone(), 3, n_out_channels, n_heads, device, ff_dim_scale),
+            FlexFormer(patch_size.clone() // 2, 3, n_out_channels, **flexformer_kwargs),
         )
         patch_size //= 2
 
@@ -59,14 +62,14 @@ class FlexNetAvgPool(MedMNISTBase):
             print(f'Group {i + 1}: {patch_size.tolist()} with {n_out_channels} channels')
             for _ in range(repeats):
                 self.layers.append(nn.Sequential(
-                    FlexFormer(patch_size.clone(), 3, n_out_channels, n_heads, device, ff_dim_scale),
-                    FlexFormer(patch_size.clone(), 3, n_out_channels, n_heads, device, ff_dim_scale),
+                    FlexFormer(patch_size.clone(), 3, n_out_channels, **flexformer_kwargs),
+                    FlexFormer(patch_size.clone(), 3, n_out_channels, **flexformer_kwargs),
                 ))
         self.classifier = nn.Linear(n_out_channels, self.n_classes)
 
     def forward(self, x):
         # view for transformer
-        x_ = x.flatten(2).permute(0, 2, 1)  # (B, C, H*W)
+        x_ = x.flatten(2).permute(0, 2, 1).contiguous()  # (B, C, H*W)
         x_ = self.first_layer(x_)
         for i, layer in enumerate(self.layers):
             x_ = layer(x_)
@@ -87,8 +90,7 @@ class FlexNetAvgPool(MedMNISTBase):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    f = FlexNetAvgPool('BreastMNIST', device='cpu')
-    f = torch.compile(f)
+    f = FlexNetAvgPool('BreastMNIST', device='cpu', pe_learnable=True)
     x = torch.randn(1, 1, 224, 224)
     y = f(x)
     print(y.shape)

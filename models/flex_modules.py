@@ -1,5 +1,7 @@
+from typing import Optional
+
 import torch
-from torch import nn
+from torch import nn, Tensor
 from torch.nn import functional as F
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
@@ -36,10 +38,12 @@ class Flextension(nn.Module):
 
 class FlexFormer(nn.TransformerEncoderLayer):
     def __init__(self, patch_size: torch.Tensor, kernel: int, in_channel: int, nhead: int, device: str,
-                 dim_ff_scale: int = 4, dropout: float = 0.1, activation=F.leaky_relu, layer_norm_eps=1e-5):
+                 dim_ff_scale: int = 4, dropout: float = 0.1, activation=F.leaky_relu, pos_prior=None,
+                 pe_learnable=False):
         super().__init__(d_model=in_channel, nhead=nhead, dim_feedforward=in_channel * dim_ff_scale, dropout=dropout,
-                         activation=activation, layer_norm_eps=layer_norm_eps, batch_first=True)
+                         activation=activation, layer_norm_eps=1e-5, batch_first=True, norm_first=True)
 
+        print(patch_size.tolist(), in_channel)
         self.kernel = torch.tensor([kernel, kernel], device=device)
         self.patch_size = patch_size.to(device)
         S = patch_size.prod().item()
@@ -47,6 +51,29 @@ class FlexFormer(nn.TransformerEncoderLayer):
         self.self_attn = Flextension(self.self_attn.in_proj_weight, self.self_attn.in_proj_bias,
                                      self.self_attn.out_proj.weight, self.self_attn.out_proj.bias, self.block_mask,
                                      attn_heads=nhead)
+
+        # positional embedding
+        if pos_prior is None:
+            pos_prior = torch.randn(1, S, len(patch_size), device=device)
+        elif pos_prior == 'coord':
+            pos_prior = torch.meshgrid(*[torch.linspace(-1, 1, d.item()) for d in patch_size])
+            pos_prior = torch.stack(pos_prior, -1).flatten(0, -2).unsqueeze(0)
+        else:
+            raise ValueError(f"Unknown positional prior: {pos_prior}")
+        self.pe_proj = nn.Linear(len(patch_size), in_channel)
+        if pe_learnable:
+            self.pos_emb = nn.Parameter(pos_prior)
+        else:
+            self.register_buffer('pos_emb', pos_prior)
+
+    def forward(self,
+        src: Tensor,
+        src_mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        is_causal: bool = False,):
+        # add positional embedding
+        x = src + self.pe_proj(self.pos_emb)
+        return super().forward(x, src_mask, src_key_padding_mask, is_causal)
 
     def compute_mask(self, b, h, q_idx, kv_idx):
         # unravel index
@@ -63,8 +90,10 @@ class FlexFormer(nn.TransformerEncoderLayer):
 
 if __name__ == '__main__':
     from torchinfo import summary
+
     patch_size = torch.tensor([16, 16])
-    f = FlexFormer(patch_size, 3, 64, 4, 'cpu')
+    f = FlexFormer(patch_size, 3, 64, 4, 'cpu', pos_prior='coord')
+    print(f)
     x = torch.rand(1, patch_size.prod().item(), 64)
     y = f(x)
     summary(f, input_size=(1, patch_size.prod().item(), 64))
