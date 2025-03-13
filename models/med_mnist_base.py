@@ -15,9 +15,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class MedMNISTBase(LightningModule):
-    def __init__(self, ds_name: str):
+    def __init__(self, ds_name: str, learn_rate: float = 0.001):
         super().__init__()
         # attributes
+        self.lr = learn_rate
         self.ds_name = ds_name
         self.n_channels = INFO[ds_name.lower()]['n_channels']
         self.label = list(INFO[ds_name.lower()]['label'].values())
@@ -54,7 +55,7 @@ class MedMNISTBase(LightningModule):
         self.val_loss = MeanMetric()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters())
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
     @abstractmethod

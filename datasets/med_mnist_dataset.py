@@ -6,7 +6,7 @@ from torchvision.transforms import ToTensor
 
 
 class MedMNISTDataModule(LightningDataModule):
-    def __init__(self, dataset_name: str, batch_size: int = 3, spatial_size: int = 224,
+    def __init__(self, dataset_name: str, batch_size: int = 78, spatial_size: int = 224,
                  affine_params_rot_trans_scale: tuple = (30, 0.1, 0.15), use_data_aug: bool = True):
         """
         :param dataset_name: name of the dataset. Has to be one of the MedMNIST datasets
@@ -17,7 +17,8 @@ class MedMNISTDataModule(LightningDataModule):
         """
         super().__init__()
         self.spatial_size = spatial_size
-        self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
+        print('TODO: disable drop last for validation and test dataloader, but keep for training')
+        self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available(), 'drop_last': True}
         self.DataClass = getattr(medmnist, medmnist.INFO[dataset_name.lower()]['python_class'])
 
         print("TODO: Implement normalization and loss weighting!!!")
@@ -45,7 +46,7 @@ class MedMNISTDataModule(LightningDataModule):
             raise ValueError(f"Unknown stage: {stage}")
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, shuffle=True, drop_last=True, **self.dl_kwargs)
+        return torch.utils.data.DataLoader(self.train_dataset, shuffle=True, **self.dl_kwargs)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_dataset, **self.dl_kwargs)
@@ -62,8 +63,9 @@ class MedMNISTDataModule(LightningDataModule):
 
 
 if __name__ == '__main__':
-    dm = MedMNISTDataModule('BreastMNIST', batch_size=1, spatial_size=224, affine_params_rot_trans_scale=None)
+    dm = MedMNISTDataModule('BreastMNIST', batch_size=1, spatial_size=224)
     dm.setup('fit')
+    print('Length of train dataset:', len(dm.train_dataset), 'Length of val dataset:', len(dm.val_dataset))
     dl = dm.train_dataloader()
     x, y = next(iter(dl))
     print(x.shape, y)

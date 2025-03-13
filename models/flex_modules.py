@@ -7,8 +7,7 @@ from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 
 class Flextension(nn.Module):
-    def __init__(self, in_proj_weight, in_proj_bias, out_proj_weight, out_proj_bias, block_mask, attn_heads,
-                 kernel_options=None):
+    def __init__(self, in_proj_weight, in_proj_bias, out_proj_weight, out_proj_bias, block_mask, attn_heads):
         super().__init__()
         # weight and bias for linear layers
         self.in_proj_weight = in_proj_weight
@@ -21,7 +20,8 @@ class Flextension(nn.Module):
         self._qkv_same_embed_dim = True
 
         # attributes for flex_attention
-        self.kernel_options = kernel_options
+        self.kernel_options = {"BLOCK_M": 32, "BLOCK_N": 32, "BLOCK_M1": 16, "BLOCK_N1": 32, "BLOCK_M2": 32,
+                              "BLOCK_N2": 16, }
         self.block_mask = block_mask
 
     def forward(self, x, x1, x2, attn_mask=None, key_padding_mask=None, need_weights=False, is_causal=False):
@@ -44,6 +44,7 @@ class FlexFormer(nn.TransformerEncoderLayer):
                          activation=activation, layer_norm_eps=1e-5, batch_first=True, norm_first=True)
 
         print(patch_size.tolist(), in_channel)
+        assert (patch_size % 2 == 0).all(), "Patch size must be even"
         self.kernel = torch.tensor([kernel, kernel], device=device)
         self.patch_size = patch_size.to(device)
         S = patch_size.prod().item()
@@ -83,8 +84,9 @@ class FlexFormer(nn.TransformerEncoderLayer):
         kv_y = kv_idx // self.patch_size[1]
 
         # compute mask
-        is_valid = (q_x - kv_x).abs() <= self.kernel[0] // 2
-        is_valid &= (q_y - kv_y).abs() <= self.kernel[1] // 2
+        is_valid_x = (q_x - kv_x).abs() <= self.kernel[0] // 2
+        is_valid_y = (q_y - kv_y).abs() <= self.kernel[1] // 2
+        is_valid = is_valid_x & is_valid_y
         return is_valid
 
 
