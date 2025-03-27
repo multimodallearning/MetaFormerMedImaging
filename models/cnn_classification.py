@@ -5,7 +5,7 @@ from models.med_mnist_base import MedMNISTBase
 
 
 class CNNClassifier(MedMNISTBase):
-    def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False):
+    def __init__(self, dataset_name: str, model: str = 'resnet18', pretrained: bool = False):
         super().__init__(dataset_name)
         self.model_name = model
         if self.is_2d:

@@ -1,8 +1,3 @@
-# import os
-# # set TORCH_LOGS="+dynamo" and TORCHDYNAMO_VERBOSE=1
-# os.environ['TORCH_LOGS'] = '+dynamo'
-# os.environ['TORCHDYNAMO_VERBOSE'] = '1'
-
 from typing import List
 
 import torch
@@ -31,12 +26,14 @@ class PoolWithChannelExpansion(nn.Module):
                 nn.MaxPool2d(kernel_size, stride, padding),
                 nn.Conv2d(in_channel, out_channel, 1, 1, 0)
             )
-        elif pool_op == 'conv':
+        elif pool_op == 'conv_block':
             self.pool = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, kernel_size, stride, padding, bias=False),
+                nn.Conv2d(in_channel, out_channel, kernel_size, stride, padding, bias=False, groups=in_channel),
                 nn.InstanceNorm2d(out_channel, affine=True),
                 nn.LeakyReLU()
             )
+        elif pool_op == 'conv':
+            self.pool = nn.Conv2d(in_channel, out_channel, kernel_size, stride, padding, bias=False, groups=in_channel)
         else:
             raise ValueError(f"Unknown pooling operation: {pool_op}")
 
@@ -52,11 +49,11 @@ class PoolWithChannelExpansion(nn.Module):
 
 class FlexNetAvgPoolModel(nn.Module):
     def __init__(self, n_channel: int, n_classes: int, n_heads: int = 4, ff_dim_scale: int = 2,
-                 patch_size: List[int] = [224, 224],
-                 device: str = 'cuda', pos_prior='coord', pe_learnable=False):
+                 patch_size: List[int] = [224, 224], pool_op: str = 'avg',
+                 device: str = 'cuda', pos_prior='rnd', pe_learnable=True):
         super().__init__()
         patch_size = torch.tensor(patch_size)
-        flexformer_kwargs = dict(nhead=n_heads, device=device, dim_ff_scale=ff_dim_scale, pos_prior=pos_prior,
+        flexformer_kwargs = dict(nhead=n_heads, device=device, dim_ff_scale=ff_dim_scale, pos_emb=pos_prior,
                                  pe_learnable=pe_learnable)
 
         n_out_channels = 64
@@ -67,13 +64,13 @@ class FlexNetAvgPoolModel(nn.Module):
         patch_size //= 2
 
         self.layers = nn.ModuleList()
-        for i, repeats in enumerate([3, 4, 6, ]):  # 3]): TODO uneven number could be a problem?
+        for i, repeats in enumerate([2, 2, 2, 2]):
             if i == 0:  # max pool of second group
                 self.layers.append(
                     PoolWithChannelExpansion(patch_size.clone(), n_out_channels, n_out_channels, 3, 2, 1, 'max'))
             else:
                 self.layers.append(
-                    PoolWithChannelExpansion(patch_size.clone(), n_out_channels, n_out_channels * 2, 3, 2, 1))
+                    PoolWithChannelExpansion(patch_size.clone(), n_out_channels, n_out_channels * 2, 3, 2, 1, pool_op))
                 n_out_channels *= 2
             patch_size //= 2
             print(f'Group {i + 1}: {patch_size.tolist()} with {n_out_channels} channels')
@@ -98,14 +95,13 @@ class FlexNetAvgPoolModel(nn.Module):
 
 class FlexNetAvgPool(MedMNISTBase):
     def __init__(self, dataset_name: str, n_heads: int = 4, ff_dim_scale: int = 4,
-                 patch_size: List[int] = [224, 224], lr :float = 0.0001,
-                 device: str = 'cuda', pos_prior='coord', pe_learnable=False):
+                 patch_size: List[int] = [128, 128], lr: float = 0.0001, pool_op: str = 'avg',
+                 device: str = 'cuda', pos_prior='rnd', pe_learnable=True):
         super().__init__(dataset_name, lr)
-        self.model = FlexNetAvgPoolModel(self.n_channels, self.n_classes, n_heads, ff_dim_scale, patch_size, device,
-                                         pos_prior, pe_learnable)
-        if device == 'cuda':
-            print('TODO: fix for dynamic compilation')
-            self.model = torch.compile(self.model.cuda(), dynamic=False)
+        self.model = FlexNetAvgPoolModel(self.n_channels, self.n_classes, n_heads, ff_dim_scale, patch_size, pool_op,
+                                         device, pos_prior, pe_learnable)
+        # if device == 'cuda':
+        #     self.model = torch.compile(self.model.cuda(), dynamic=False)
 
     def forward(self, x):
         return self.model(x)
@@ -121,10 +117,13 @@ class FlexNetAvgPool(MedMNISTBase):
 
 if __name__ == '__main__':
     # from torchinfo import summary
-
-    f = FlexNetAvgPool('BreastMNIST', device='cuda', pe_learnable=True)
-    x = torch.randn(2, 1, 224, 224).cuda()
+    patch_size = [224, 224]
+    f = FlexNetAvgPool('BreastMNIST', device='cuda', pe_learnable=True, patch_size=patch_size).cuda()
+    x = torch.randn(2, 1, *patch_size).cuda()
+    print(x.shape)
     # f = torch.compile(f, dynamic=True)
     y = f(x)
     print(y.shape)
+    print(y.sum().backward())
+    print(f(torch.randn(4, 1, *patch_size).cuda()).shape)
     # #summary(f, (1, 1, 224, 224))

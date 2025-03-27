@@ -67,6 +67,8 @@ class MedMNISTBase(LightningModule):
         y_hat = self.forward(x)
         if isinstance(self.criterion, nn.BCEWithLogitsLoss):
             y = F.one_hot(y.squeeze(-1), num_classes=self.n_classes).float()
+        elif isinstance(self.criterion, nn.CrossEntropyLoss):
+            y = y.squeeze(-1)
         loss = self.criterion(y_hat, y)
 
         with torch.no_grad():
