@@ -17,7 +17,7 @@ class MedMNISTDataModule(LightningDataModule):
         """
         super().__init__()
         self.spatial_size = spatial_size
-        self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available(), 'drop_last': True}
+        self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
         self.DataClass = getattr(medmnist, medmnist.INFO[dataset_name.lower()]['python_class'])
 
         print("TODO: Implement normalization and loss weighting!!!")
@@ -45,7 +45,7 @@ class MedMNISTDataModule(LightningDataModule):
             raise ValueError(f"Unknown stage: {stage}")
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, shuffle=True, **self.dl_kwargs)
+        return torch.utils.data.DataLoader(self.train_dataset, shuffle=True, **self.dl_kwargs, drop_last=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_dataset, **self.dl_kwargs)
