@@ -78,7 +78,7 @@ class FlexNetPoolingModel(nn.Module):
 
     def forward(self, x):
         # view for transformer
-        x_ = x.flatten(2).permute(0, 2, 1).contiguous()  # (B, C, H*W)
+        x_ = x.flatten(2).permute(0, 2, 1).contiguous()  # (B, H*W, C)
         x_ = self.first_layer(x_)
         for i, layer in enumerate(self.layers):
             x_ = layer(x_)
