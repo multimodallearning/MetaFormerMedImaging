@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from torch.utils import benchmark
 from tqdm import tqdm
 
-from models.flex_modules import FlexFormer
+from architectures.flex_modules import FlexFormer
 
 torch._inductor.config.realize_opcount_threshold = 500
 torch._dynamo.config.cache_size_limit = 256

@@ -1,8 +1,7 @@
 import torch
-from deepspeed.accelerator import get_accelerator
 from deepspeed.profiling.flops_profiler import get_model_profile
 from torch import nn
-from models.flex_modules import FlexBlock
+from architectures.flex_modules import FlexBlock
 import pandas as pd
 from tqdm import tqdm
 

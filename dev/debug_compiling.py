@@ -1,13 +1,11 @@
 # Set TORCH_LOGS="+dynamo" and TORCHDYNAMO_VERBOSE=1 for more information
-import os
 
 # os.environ['TORCH_LOGS'] = '+dynamo'
 # os.environ['TORCHDYNAMO_VERBOSE'] = '1'
 
-from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 import torch
 from functools import reduce
-from models.flex_modules import FlexFormer
+from architectures.flex_modules import FlexFormer
 
 patch_size = [32, 32]
 S = reduce(lambda x, y: x * y, patch_size)

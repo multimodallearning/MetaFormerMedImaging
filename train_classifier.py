@@ -7,8 +7,9 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
-from models.cnn_classification import CNNClassifier
+from models.cnn_classifier import CNNClassifier
 from models.flex_net import FlexNetPooling
+from models.poolformer_classifier import PoolFormerClassifier
 from datasets.med_mnist_dataset import MedMNISTDataModule
 
 task = Task.init(project_name="FlexConv/Classification", auto_resource_monitoring=False, reuse_last_task_id=False,

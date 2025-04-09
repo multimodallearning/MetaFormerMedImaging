@@ -4,7 +4,7 @@ import torch
 from clearml import Task
 from torch import nn
 
-from models.flex_modules import FlexBlock
+from architectures.flex_modules import FlexBlock
 from models.med_mnist_base import MedMNISTBase
 
 torch._inductor.config.realize_opcount_threshold = 500
