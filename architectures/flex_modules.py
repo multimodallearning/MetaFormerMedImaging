@@ -1,7 +1,5 @@
-from typing import Optional
-
 import torch
-from torch import nn, Tensor
+from torch import nn
 from torch.nn import functional as F
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
@@ -47,9 +45,10 @@ class FlexFormer(nn.TransformerEncoderLayer):
                                      self.self_attn.out_proj.weight, self.self_attn.out_proj.bias, block_mask,
                                      attn_heads=nhead)
 
+
 class FlexBlock(nn.Module):
-    def __init__(self, patch_size: torch.Tensor, kernel: int, in_channel: int, nhead: int, n_layers:int,
-                 dim_ff_scale:int, device: str):
+    def __init__(self, patch_size: torch.Tensor, kernel: int, in_channel: int, nhead: int, n_layers: int,
+                 dim_ff_scale: int, device: str):
         super().__init__()
         print(n_layers, 'x', in_channel, patch_size.tolist())
         self.kernel = torch.tensor([kernel, kernel], device=device)
@@ -57,7 +56,8 @@ class FlexBlock(nn.Module):
         S = patch_size.prod().item()
         block_mask = create_block_mask(self.compute_mask, None, nhead, S, S, device, _compile=True)
 
-        self.layers = nn.ModuleList([FlexFormer(in_channel, nhead, dim_ff_scale, block_mask=block_mask) for _ in range(n_layers)])
+        self.layers = nn.ModuleList(
+            [FlexFormer(in_channel, nhead, dim_ff_scale, block_mask=block_mask) for _ in range(n_layers)])
         self.use_id_mapping = n_layers > 1
 
     def forward(self, x):
@@ -81,3 +81,8 @@ class FlexBlock(nn.Module):
         is_valid_y = (q_y - kv_y).abs() <= self.kernel[1] // 2
         is_valid = is_valid_x & is_valid_y
         return is_valid
+
+
+if __name__ == '__main__':
+    f = FlexFormer(128, 4)
+    print(f)
