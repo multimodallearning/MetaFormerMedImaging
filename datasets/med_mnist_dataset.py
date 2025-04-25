@@ -53,12 +53,12 @@ class MedMNISTDataModule(LightningDataModule):
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_dataset, **self.dl_kwargs)
 
-    # def on_after_batch_transfer(self, batch, dataloader_idx):
-    #     x, y = batch
-    #     if self.use_data_aug and self.trainer.training:
-    #         x = self.data_aug(x)
-    #     x = self.normalize(x)
-    #     return x, y
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        x, y = batch
+        if self.use_data_aug and self.trainer.training:
+            x = self.data_aug(x)
+        x = self.normalize(x)
+        return x, y
 
 
 if __name__ == '__main__':

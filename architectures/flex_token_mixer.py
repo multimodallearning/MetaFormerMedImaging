@@ -38,7 +38,7 @@ class FlexTokenMixer(nn.Module):
         v_ = self.view4heads(v, self.num_heads)
 
         y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options,
-                                     block_mask=self.block_mask)#, score_mod=noscore)  # (B, M, H*W, C/M)
+                                     block_mask=self.block_mask) # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
@@ -61,7 +61,11 @@ class FlexFormer(nn.Module):
 
         patch_size = torch.tensor(patch_size)
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
-            block_mask = self.generate_block_mask(num_heads, 3, patch_size / (4 * 2 ** i), device)
+            stage_patch_size = patch_size / (4 * 2 ** i)
+            if stage_patch_size.prod() > 64: # apply local self attention only when it is worth it
+                block_mask = self.generate_block_mask(num_heads, 3, stage_patch_size, device)
+            else:
+                block_mask = None
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
                 blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask)
