@@ -629,6 +629,8 @@ if has_mmseg and has_mmdet:
                 **kwargs)
 
 if __name__ == '__main__':
+    from torchinfo import summary
     m = poolformer_s12(pretrained=True)
     m.head = nn.Linear(512, 10)
     print(m)
+    summary(m, input_size=(2, 3, 128, 128))

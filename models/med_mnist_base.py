@@ -33,12 +33,13 @@ class MedMNISTBase(LightningModule):
         task = INFO[ds_name.lower()]['task']
         if task in ["multi-label", "binary-class"]:
             self.criterion = nn.BCEWithLogitsLoss()
-            self.cls_mtl_exclude = True
+            self.cls_mtl_exclude = False
         elif task == "multi-class":
             self.criterion = nn.CrossEntropyLoss()
-            self.cls_mtl_exclude = False
+            self.cls_mtl_exclude = True
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
+        print('Classes are mutual exclusive:', self.cls_mtl_exclude)
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
@@ -65,10 +66,12 @@ class MedMNISTBase(LightningModule):
     def common_step(self, batch, mode):
         x, y = batch
         y_hat = self.forward(x)
-        if isinstance(self.criterion, nn.BCEWithLogitsLoss):
-            y = F.one_hot(y.squeeze(-1), num_classes=self.n_classes).float()
-        elif isinstance(self.criterion, nn.CrossEntropyLoss):
-            y = y.squeeze(-1)
+        y = y.squeeze(-1)
+        if not self.cls_mtl_exclude: # convert indices to probabilities
+            raise NotImplementedError('Check for correctness, before using it')
+            p = torch.zeros(len(y), self.n_classes, device=y.device)
+            p.scatter_(1, y.unsqueeze(1), 1)
+            y = p
         loss = self.criterion(y_hat, y)
 
         with torch.no_grad():
@@ -93,6 +96,7 @@ class MedMNISTBase(LightningModule):
         loss_logger = getattr(self, f"{mode}_loss")
         metric_collection = getattr(self, f"{mode}_metrics")
 
+        #raise NotImplementedError("WHAT IS THIS???")
         Logger.current_logger().report_scalar('loss', mode, loss_logger.compute().cpu(), self.current_epoch)
 
         epoch_values = getattr(self, f"{mode}_metrics").compute()
