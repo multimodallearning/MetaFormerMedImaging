@@ -65,6 +65,8 @@ class FlexFormer(nn.Module):
             if stage_patch_size.prod() > 64: # apply local self attention only when it is worth it
                 block_mask = self.generate_block_mask(num_heads, 3, stage_patch_size, device)
             else:
+                # print(f'Skipping stage {i}')
+                # continue
                 block_mask = None
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels

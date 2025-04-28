@@ -1,15 +1,14 @@
+import warnings
 from abc import abstractmethod
 
+import medmnist
 import torch
 from clearml import Logger
 from medmnist import INFO
 from medmnist.dataset import MedMNIST2D, MedMNIST3D
-import medmnist
 from pytorch_lightning import LightningModule
 from torch import nn
-from torch.nn import functional as F
 from torchmetrics import classification, MetricCollection, MeanMetric
-import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning)
 

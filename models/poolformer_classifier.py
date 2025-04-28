@@ -45,15 +45,15 @@ class PoolFormerClassifier(MedMNISTBase):
 
 class FlexFormerClassifier(MedMNISTBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, weight_decay: float = 0.05, patch_size: int = 256):
-        super().__init__(dataset_name)
+                 num_heads: int = 4, lr:float=1e-4, weight_decay: float = 0.05, patch_size: int = 256):
+        super().__init__(dataset_name, learn_rate=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, [patch_size, patch_size], num_heads, model_name, pretrained)
 
         self.save_hyperparameters()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
+        #x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
         x = x.expand(-1, 3, -1, -1)
         y_hat = self.model(x)[:, :self.n_classes]
         return y_hat
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     from tqdm import trange
     from torch.nn import functional as F
 
-    poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=256).cuda()
+    poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
     print(poolformer.model)
 
     dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, use_data_aug=False, spatial_size=224)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             train_loader = iter(dm.train_dataloader())
             imgs, labels = next(train_loader)
         affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
-                               (128, 1, 256, 256), align_corners=False)
+                               (128, 1, 224, 224), align_corners=False)
         x = F.grid_sample(imgs.cuda(), affine, align_corners=False).expand(-1, 3, -1, -1)
         label = labels.squeeze(-1).cuda()
         optim.zero_grad()
