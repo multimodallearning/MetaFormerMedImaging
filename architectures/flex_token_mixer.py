@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 from architectures import poolformer as pf
+from timm.models import adapt_input_conv
 
 flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
 
@@ -50,14 +51,20 @@ class FlexTokenMixer(nn.Module):
 
 
 class FlexFormer(nn.Module):
-    def __init__(self, n_classes: int, patch_size: List[int], num_heads: int, model_name: str = "poolformer_s12",
-                 pretrained: bool = True, device: str = "cuda"):
+    def __init__(self, n_classes: int, n_input_channel:int, patch_size: List[int], num_heads: int,
+                 model_name: str = "poolformer_s12", pretrained: bool = True, device: str = "cuda"):
         super().__init__()
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
         if self.model.head.out_features != n_classes:
             print('Replacing head for new numbers of classes.')
             self.model.head = nn.Linear(self.model.head.in_features, n_classes)
+            if n_input_channel != 3:
+                print('Reusing first conv weights and adapt to new number of input channel')
+                self.model.patch_embed.proj.weight = nn.Parameter(
+                    adapt_input_conv(n_input_channel, self.model.patch_embed.proj.weight))
+                self.model.patch_embed.proj.in_channels = n_input_channel
+
 
         patch_size = torch.tensor(patch_size)
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):

@@ -7,6 +7,8 @@ from models.med_mnist_base import MedMNISTBase
 from architectures.flex_token_mixer import FlexFormer
 from torch.nn import functional as F
 
+from timm.models import adapt_input_conv
+
 
 class PoolFormerClassifier(MedMNISTBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
@@ -15,12 +17,16 @@ class PoolFormerClassifier(MedMNISTBase):
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
+        # adapt classifer
         self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
+        # adapt first conv to new number of input channel
+        self.model.patch_embed.proj.weight = nn.Parameter(
+            adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
+        self.model.patch_embed.proj.in_channels = self.n_channels
 
         self.save_hyperparameters()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.expand(-1, 3, -1, -1)
         y_hat = self.model(x)
         return y_hat
 
@@ -45,16 +51,15 @@ class PoolFormerClassifier(MedMNISTBase):
 
 class FlexFormerClassifier(MedMNISTBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, lr:float=1e-4, weight_decay: float = 0.05, patch_size: int = 256):
+                 num_heads: int = 4, lr: float = 1e-4, weight_decay: float = 0.05, patch_size: int = 224):
         super().__init__(dataset_name, learn_rate=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
-        self.model = FlexFormer(self.n_classes, [patch_size, patch_size], num_heads, model_name, pretrained)
+        self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name, pretrained)
 
         self.save_hyperparameters()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        #x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
-        x = x.expand(-1, 3, -1, -1)
+        # x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
         y_hat = self.model(x)[:, :self.n_classes]
         return y_hat
 
@@ -74,7 +79,8 @@ if __name__ == '__main__':
     from tqdm import trange
     from torch.nn import functional as F
 
-    poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
+    #poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
+    poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
     print(poolformer.model)
 
     dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, use_data_aug=False, spatial_size=224)
@@ -94,7 +100,7 @@ if __name__ == '__main__':
             imgs, labels = next(train_loader)
         affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
                                (128, 1, 224, 224), align_corners=False)
-        x = F.grid_sample(imgs.cuda(), affine, align_corners=False).expand(-1, 3, -1, -1)
+        x = F.grid_sample(imgs.cuda(), affine, align_corners=False)  # .expand(-1, 3, -1, -1)
         label = labels.squeeze(-1).cuda()
         optim.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
