@@ -10,6 +10,8 @@ from pytorch_lightning import LightningModule
 from torch import nn
 from torchmetrics import classification, MetricCollection, MeanMetric
 
+from datasets.med_mnist_statistics import LOSS_WEIGHTS
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
@@ -28,13 +30,14 @@ class MedMNISTBase(LightningModule):
         assert self.is_2d != self.is_3d, "Either 2D or 3D dataset must be selected"
 
         # criterion
-        print("TODO: Implement loss weighting!!!")
         task = INFO[ds_name.lower()]['task']
+        loss_weights = torch.tensor(LOSS_WEIGHTS[ds_name.lower()])
         if task in ["multi-label", "binary-class"]:
-            self.criterion = nn.BCEWithLogitsLoss()
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
             self.cls_mtl_exclude = False
         elif task == "multi-class":
-            self.criterion = nn.CrossEntropyLoss()
+            print('TODO: label smoothing')
+            self.criterion = nn.CrossEntropyLoss(weight=loss_weights)
             self.cls_mtl_exclude = True
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")

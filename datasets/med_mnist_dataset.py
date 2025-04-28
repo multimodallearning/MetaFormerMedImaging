@@ -1,8 +1,10 @@
-from pytorch_lightning import LightningDataModule
 import medmnist
 import torch
 from kornia import augmentation
+from pytorch_lightning import LightningDataModule
 from torchvision.transforms import ToTensor
+
+from datasets.med_mnist_statistics import IMG_MEAN_STD
 
 
 class MedMNISTDataModule(LightningDataModule):
@@ -20,7 +22,6 @@ class MedMNISTDataModule(LightningDataModule):
         self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
         self.DataClass = getattr(medmnist, medmnist.INFO[dataset_name.lower()]['python_class'])
 
-        print("TODO: Implement normalization and loss weighting!!!")
         self.use_data_aug = use_data_aug
         rotate, translate, scale = affine_params_rot_trans_scale
         if issubclass(self.DataClass, medmnist.dataset.MedMNIST2D):
@@ -32,7 +33,8 @@ class MedMNISTDataModule(LightningDataModule):
         else:
             raise ValueError(f"Unknown MedMNIST dataset class: {self.DataClass}")
 
-        self.normalize = augmentation.Normalize(mean=0.5, std=0.5)
+        img_stats = IMG_MEAN_STD[dataset_name.lower()]
+        self.normalize = augmentation.Normalize(mean=img_stats.mean, std=img_stats.std)
 
     def setup(self, stage: str = None):
         ds_kwargs = {'root': './data', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
