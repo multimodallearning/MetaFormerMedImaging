@@ -1,15 +1,16 @@
 import medmnist
 import torch
 from kornia import augmentation
+from kornia.augmentation.auto import RandAugment
 from pytorch_lightning import LightningDataModule
 from torchvision.transforms import ToTensor
+from datasets import nnunet_data_aug
 
-from datasets.med_mnist_statistics import IMG_MEAN_STD
+from datasets.med_mnist_statistics import IMG_MEAN_STD, ALLOW_FLIPPING
 
 
 class MedMNISTDataModule(LightningDataModule):
-    def __init__(self, dataset_name: str, batch_size: int = 128, spatial_size: int = 224,
-                 affine_params_rot_trans_scale: tuple = (30, 0.1, 0.15), use_data_aug: bool = True):
+    def __init__(self, dataset_name: str, batch_size: int = 128, spatial_size: int = 224, use_data_aug: bool = True):
         """
         :param dataset_name: name of the dataset. Has to be one of the MedMNIST datasets
         :param batch_size: batch size
@@ -23,13 +24,11 @@ class MedMNISTDataModule(LightningDataModule):
         self.DataClass = getattr(medmnist, medmnist.INFO[dataset_name.lower()]['python_class'])
 
         self.use_data_aug = use_data_aug
-        rotate, translate, scale = affine_params_rot_trans_scale
+        allow_flipping = ALLOW_FLIPPING[dataset_name.lower()]
         if issubclass(self.DataClass, medmnist.dataset.MedMNIST2D):
-            self.data_aug = augmentation.RandomAffine(degrees=rotate, translate=(translate,) * 2,
-                                                      scale=(1 - scale, 1 + scale), p=1)
+            self.data_aug = nnunet_data_aug.nnUNetDataAugmentation2D(allow_flipping)
         elif issubclass(self.DataClass, medmnist.dataset.MedMNIST3D):
-            self.data_aug = augmentation.RandomAffine3D(degrees=rotate, translate=(translate,) * 3,
-                                                        scale=(1 - scale, 1 + scale), p=1)
+            self.data_aug = nnunet_data_aug.nnUNetDataAugmentation3D(allow_flipping)
         else:
             raise ValueError(f"Unknown MedMNIST dataset class: {self.DataClass}")
 
@@ -64,8 +63,8 @@ class MedMNISTDataModule(LightningDataModule):
 
 
 if __name__ == '__main__':
-    from kornia.augmentation.auto import RandAugment
     from matplotlib import pyplot as plt
+
     dm = MedMNISTDataModule('OrganAMNIST', batch_size=1, spatial_size=224)
     dm.setup('fit')
     print('Length of train dataset:', len(dm.train_dataset), 'Length of val dataset:', len(dm.val_dataset))
