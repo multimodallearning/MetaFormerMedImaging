@@ -5,9 +5,10 @@ from models.med_mnist_base import MedMNISTBase
 
 
 class CNNClassifier(MedMNISTBase):
-    def __init__(self, dataset_name: str, model: str = 'resnet18', pretrained: bool = False):
+    def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False):
         super().__init__(dataset_name)
         self.model_name = model
+        self.ds_name = dataset_name
         if self.is_2d:
             self.model = timm.create_model(model, pretrained=pretrained, num_classes=self.n_classes, in_chans=self.n_channels)
         elif self.is_3d:

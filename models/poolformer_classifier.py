@@ -1,18 +1,16 @@
 import torch
 from clearml import Task
+from timm.models import adapt_input_conv
 from torch import nn
 
 from architectures import poolformer as pf
-from models.med_mnist_base import MedMNISTBase
 from architectures.flex_token_mixer import FlexFormer
-from torch.nn import functional as F
-
-from timm.models import adapt_input_conv
+from models.med_mnist_base import MedMNISTBase
 
 
 class PoolFormerClassifier(MedMNISTBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 train_poolformer: bool = False, lr_poolformer: float = 0.0001, weight_decay: float = 0.05):
+                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05):
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -41,10 +39,14 @@ class PoolFormerClassifier(MedMNISTBase):
             param_dicts.append({"params": self.model.patch_embed.parameters(), "lr": self.hparams.lr_poolformer})
             self.model.patch_embed.requires_grad_(True)
 
-        optimizer, scheduler = super().configure_optimizers()
+        # use optimizer and scheduler from parent class
+        optimizers, schedulers = super().configure_optimizers()
+        assert len(optimizers) == 1, "Only one optimizer is supported"
+        optimizer = optimizers[0]
         optimizer.param_groups = []
-        optimizer.add_param_group(param_dicts)
-        return [optimizer], [scheduler]
+        for param_dict in param_dicts:
+            optimizer.add_param_group(param_dict)
+        return [optimizer], schedulers
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
@@ -56,7 +58,8 @@ class FlexFormerClassifier(MedMNISTBase):
                  num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224):
         super().__init__(dataset_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
-        self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name, pretrained)
+        self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name,
+                                pretrained)
 
         self.save_hyperparameters()
 
@@ -77,7 +80,7 @@ if __name__ == '__main__':
     from tqdm import trange
     from torch.nn import functional as F
 
-    #poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
+    # poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
     poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
     print(poolformer.model)
 
