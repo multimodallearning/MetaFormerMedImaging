@@ -41,8 +41,10 @@ class PoolFormerClassifier(MedMNISTBase):
             param_dicts.append({"params": self.model.patch_embed.parameters(), "lr": self.hparams.lr_poolformer})
             self.model.patch_embed.requires_grad_(True)
 
-        optimizer = torch.optim.AdamW(param_dicts, lr=self.lr, weight_decay=self.hparams.weight_decay)
-        return optimizer
+        optimizer, scheduler = super().configure_optimizers()
+        optimizer.param_groups = []
+        optimizer.add_param_group(param_dicts)
+        return [optimizer], [scheduler]
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
@@ -51,8 +53,8 @@ class PoolFormerClassifier(MedMNISTBase):
 
 class FlexFormerClassifier(MedMNISTBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, lr: float = 1e-4, weight_decay: float = 0.05, patch_size: int = 224):
-        super().__init__(dataset_name, learn_rate=lr)
+                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224):
+        super().__init__(dataset_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name, pretrained)
 
@@ -62,10 +64,6 @@ class FlexFormerClassifier(MedMNISTBase):
         # x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
         y_hat = self.model(x)[:, :self.n_classes]
         return y_hat
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.hparams.weight_decay)
-        return optimizer
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:

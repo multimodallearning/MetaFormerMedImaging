@@ -1,14 +1,18 @@
 import warnings
 from abc import abstractmethod
+from argparse import Namespace
+from typing import Optional, Any
 
 import medmnist
 import torch
-from clearml import Logger
+from clearml import Logger, Task
 from medmnist import INFO
 from medmnist.dataset import MedMNIST2D, MedMNIST3D
 from pytorch_lightning import LightningModule
+from pytorch_lightning.utilities.types import LRSchedulerTypeUnion
 from torch import nn
 from torchmetrics import classification, MetricCollection, MeanMetric
+from timm.scheduler import CosineLRScheduler
 
 from datasets.med_mnist_statistics import LOSS_WEIGHTS
 
@@ -16,11 +20,11 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class MedMNISTBase(LightningModule):
-    def __init__(self, ds_name: str, learn_rate: float = 0.001, ce_label_smoothing: float = 0.1):
+    def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.05, ce_label_smoothing: float = 0.1,
+                 warmup_epochs: int = 5,
+                 min_lr: float = 1e-5):
         super().__init__()
         # attributes
-        self.lr = learn_rate
-        self.ds_name = ds_name
         self.n_channels = INFO[ds_name.lower()]['n_channels']
         self.label = list(INFO[ds_name.lower()]['label'].values())
         self.n_classes = len(self.label)
@@ -56,11 +60,22 @@ class MedMNISTBase(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.save_hyperparameters()
+        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
+        Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.optim_hp.lr, weight_decay=self.optim_hp.wd)
+        scheduler = CosineLRScheduler(optimizer, t_initial=self.trainer.max_epochs,
+                                      warmup_t=self.optim_hp.warmup_epochs,
+                                      warmup_lr_init=self.optim_hp.min_lr, lr_min=self.optim_hp.min_lr,
+                                      warmup_prefix=True)
+        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
+
+    def lr_scheduler_step(self, scheduler: LRSchedulerTypeUnion, metric: Optional[Any]) -> None:
+        scheduler.step(self.current_epoch)
+        if Logger.current_logger() is not None:
+            Logger.current_logger().report_scalar('learning rate', 'lr',
+                                                  scheduler._get_lr(self.current_epoch)[0], self.current_epoch)
 
     @abstractmethod
     def forward(self, batch):
@@ -70,7 +85,7 @@ class MedMNISTBase(LightningModule):
         x, y = batch
         y_hat = self.forward(x)
         y = y.squeeze(-1)
-        if not self.cls_mtl_exclude: # convert indices to probabilities
+        if not self.cls_mtl_exclude:  # convert indices to probabilities
             raise NotImplementedError('Check for correctness, before using it')
             p = torch.zeros(len(y), self.n_classes, device=y.device)
             p.scatter_(1, y.unsqueeze(1), 1)
@@ -99,7 +114,7 @@ class MedMNISTBase(LightningModule):
         loss_logger = getattr(self, f"{mode}_loss")
         metric_collection = getattr(self, f"{mode}_metrics")
 
-        #raise NotImplementedError("WHAT IS THIS???")
+        # raise NotImplementedError("WHAT IS THIS???")
         Logger.current_logger().report_scalar('loss', mode, loss_logger.compute().cpu(), self.current_epoch)
 
         epoch_values = getattr(self, f"{mode}_metrics").compute()

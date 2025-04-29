@@ -64,9 +64,17 @@ class MedMNISTDataModule(LightningDataModule):
 
 
 if __name__ == '__main__':
+    from kornia.augmentation.auto import RandAugment
+    from matplotlib import pyplot as plt
     dm = MedMNISTDataModule('OrganAMNIST', batch_size=1, spatial_size=224)
     dm.setup('fit')
     print('Length of train dataset:', len(dm.train_dataset), 'Length of val dataset:', len(dm.val_dataset))
     dl = dm.train_dataloader()
     x, y = next(iter(dl))
     print(x.shape, y)
+    plt.imshow(x.squeeze(), 'gray')
+    aug = RandAugment(n=2, m=9)
+    x = aug(x)
+    plt.figure()
+    plt.imshow(x.squeeze(), 'gray')
+    plt.show()
