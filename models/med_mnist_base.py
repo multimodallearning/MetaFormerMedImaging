@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class MedMNISTBase(LightningModule):
-    def __init__(self, ds_name: str, learn_rate: float = 0.001):
+    def __init__(self, ds_name: str, learn_rate: float = 0.001, ce_label_smoothing: float = 0.1):
         super().__init__()
         # attributes
         self.lr = learn_rate
@@ -36,8 +36,7 @@ class MedMNISTBase(LightningModule):
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
             self.cls_mtl_exclude = False
         elif task == "multi-class":
-            print('TODO: label smoothing')
-            self.criterion = nn.CrossEntropyLoss(weight=loss_weights)
+            self.criterion = nn.CrossEntropyLoss(weight=loss_weights, label_smoothing=ce_label_smoothing)
             self.cls_mtl_exclude = True
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
@@ -56,6 +55,8 @@ class MedMNISTBase(LightningModule):
         self.val_metrics = self.train_metrics.clone(postfix='/val')
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
+
+        self.save_hyperparameters()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
