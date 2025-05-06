@@ -13,29 +13,41 @@ from pytorch_lightning.utilities.types import LRSchedulerTypeUnion
 from torch import nn
 from torchmetrics import classification, MetricCollection, MeanMetric
 from timm.scheduler import CosineLRScheduler
+from datasets.imagewoof_dataset import ImageWoofDataset
 
 from datasets.med_mnist_statistics import LOSS_WEIGHTS
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-class MedMNISTBase(LightningModule):
+class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.05, ce_label_smoothing: float = 0.1,
-                 warmup_epochs: int = 5,
-                 min_lr: float = 1e-5):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
-        self.n_channels = INFO[ds_name.lower()]['n_channels']
-        self.label = list(INFO[ds_name.lower()]['label'].values())
-        self.n_classes = len(self.label)
-        ds_class = getattr(medmnist, INFO[ds_name.lower()]['python_class'])
-        self.is_2d = issubclass(ds_class, MedMNIST2D)
-        self.is_3d = issubclass(ds_class, MedMNIST3D)
-        assert self.is_2d != self.is_3d, "Either 2D or 3D dataset must be selected"
+        self.is_2d = False
+        self.is_3d = False
+        if ds_name.lower().endswith("mnist"):
+            self.n_channels = INFO[ds_name.lower()]['n_channels']
+            self.label = list(INFO[ds_name.lower()]['label'].values())
+            self.n_classes = len(self.label)
+            ds_class = getattr(medmnist, INFO[ds_name.lower()]['python_class'])
+            self.is_2d = issubclass(ds_class, MedMNIST2D)
+            self.is_3d = issubclass(ds_class, MedMNIST3D)
+            task = INFO[ds_name.lower()]['task']
+            loss_weights = torch.tensor(LOSS_WEIGHTS[ds_name.lower()])
+        elif ds_name.lower() == "imagewoof":
+            self.n_channels = 3
+            self.label = ImageWoofDataset.LABEL # placeholders
+            self.n_classes = len(self.label)
+            self.is_2d = True
+            task = "multi-class"
+            loss_weights = torch.tensor(ImageWoofDataset.LOSS_WEIGHTS)
+        else:
+            raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
+        assert self.is_2d != self.is_3d, "Either 2D or 3D dataset must be selected"
         # criterion
-        task = INFO[ds_name.lower()]['task']
-        loss_weights = torch.tensor(LOSS_WEIGHTS[ds_name.lower()])
         if task in ["multi-label", "binary-class"]:
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
             self.cls_mtl_exclude = False
@@ -61,7 +73,8 @@ class MedMNISTBase(LightningModule):
         self.val_loss = MeanMetric()
 
         self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
-        Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
+        if Task.current_task() is not None:
+            Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.optim_hp.lr, weight_decay=self.optim_hp.wd)

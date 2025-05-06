@@ -5,10 +5,10 @@ from torch import nn
 
 from architectures import poolformer as pf
 from architectures.flex_token_mixer import FlexFormer
-from models.med_mnist_base import MedMNISTBase
+from models.classifier_base import ClassifierBase
 
 
-class PoolFormerClassifier(MedMNISTBase):
+class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05):
         super().__init__(dataset_name)
@@ -53,7 +53,7 @@ class PoolFormerClassifier(MedMNISTBase):
             Task.current_task().set_name(f'{self.hparams.model_name}_{self.hparams.dataset_name}')
 
 
-class FlexFormerClassifier(MedMNISTBase):
+class FlexFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224):
         super().__init__(dataset_name, lr=lr)
@@ -65,7 +65,7 @@ class FlexFormerClassifier(MedMNISTBase):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x = F.interpolate(x, size=(self.hparams.patch_size,) * 2, mode='bilinear', align_corners=False)
-        y_hat = self.model(x)[:, :self.n_classes]
+        y_hat = self.model(x)
         return y_hat
 
     def on_fit_start(self) -> None:
@@ -76,15 +76,15 @@ class FlexFormerClassifier(MedMNISTBase):
 
 
 if __name__ == '__main__':
-    from datasets.med_mnist_dataset import MedMNISTDataModule
+    from datasets.imagewoof_dataset import ImageWoofDataModule
     from tqdm import trange
     from torch.nn import functional as F
 
-    # poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
-    poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
+    poolformer = FlexFormerClassifier('imagewoof', 'poolformer_s12', patch_size=224).cuda()
+    #poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
     print(poolformer.model)
 
-    dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, use_data_aug=False, spatial_size=224)
+    dm = ImageWoofDataModule(batch_size=128, use_data_aug=False, spatial_size=224)
     dm.setup('fit')
     train_loader = iter(dm.train_dataloader())
 
@@ -100,12 +100,12 @@ if __name__ == '__main__':
             train_loader = iter(dm.train_dataloader())
             imgs, labels = next(train_loader)
         affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
-                               (128, 1, 224, 224), align_corners=False)
+                               (128, 3, 224, 224), align_corners=False)
         x = F.grid_sample(imgs.cuda(), affine, align_corners=False)  # .expand(-1, 3, -1, -1)
         label = labels.squeeze(-1).cuda()
         optim.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-            output = poolformer(x)[:, :11]
+            output = poolformer(x)
             loss = loss_fn(output, label)
         if loss.isnan():
             print('Debug')

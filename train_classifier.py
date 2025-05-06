@@ -8,15 +8,15 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
 from models.cnn_classifier import CNNClassifier
-from models.flex_net import FlexNetPooling
 from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier
 from datasets.med_mnist_dataset import MedMNISTDataModule
+from datasets.imagewoof_dataset import ImageWoofDataModule
 
 task = Task.init(project_name="FlexConv/Classification", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)
 
 # training routine
-cli = LightningCLI(datamodule_class=MedMNISTDataModule)
+cli = LightningCLI()
 
 # housekeeping
 trainer = cli.trainer

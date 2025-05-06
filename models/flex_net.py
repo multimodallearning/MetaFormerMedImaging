@@ -5,7 +5,7 @@ from clearml import Task
 from torch import nn
 
 from architectures.flex_modules import FlexBlock
-from models.med_mnist_base import MedMNISTBase
+from models.med_mnist_base import ClassifierBase
 
 torch._inductor.config.realize_opcount_threshold = 500
 torch._dynamo.config.cache_size_limit = 128
@@ -88,7 +88,7 @@ class FlexNetPoolingModel(nn.Module):
         return y_hat
 
 
-class FlexNetPooling(MedMNISTBase):
+class FlexNetPooling(ClassifierBase):
     def __init__(self, dataset_name: str, n_heads: int = 4, ff_dim_scale: int = 4, patch_size: List[int] = [224, 224],
                  group_repeats: List[int] = [2, 2, 2, 2], lr: float = 1e-4, pool_op: str = 'conv', device: str = 'cuda'):
         super().__init__(dataset_name, lr)

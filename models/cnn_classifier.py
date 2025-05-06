@@ -1,10 +1,10 @@
 import timm
 from clearml import Task
 
-from models.med_mnist_base import MedMNISTBase
+from models.classifier_base import ClassifierBase
 
 
-class CNNClassifier(MedMNISTBase):
+class CNNClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False):
         super().__init__(dataset_name)
         self.model_name = model
