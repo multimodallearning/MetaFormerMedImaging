@@ -10,8 +10,10 @@ from timm.models import adapt_input_conv
 
 flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
 
+
 def noscore(score, b, h, q_idx, kv_idx):
-    return score*0+1
+    return score * 0 + 1
+
 
 class FlexTokenMixer(nn.Module):
     def __init__(self, num_channel: int, num_heads: int, block_mask=None, eps: float = 0.02):
@@ -39,7 +41,7 @@ class FlexTokenMixer(nn.Module):
         v_ = self.view4heads(v, self.num_heads)
 
         y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options,
-                                     block_mask=self.block_mask) # (B, M, H*W, C/M)
+                                     block_mask=self.block_mask)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
@@ -51,8 +53,9 @@ class FlexTokenMixer(nn.Module):
 
 
 class FlexFormer(nn.Module):
-    def __init__(self, n_classes: int, n_input_channel:int, patch_size: List[int], num_heads: int,
-                 model_name: str = "poolformer_s12", pretrained: bool = True, device: str = "cuda"):
+    def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], num_heads: int,
+                 model_name: str = "poolformer_s12", pretrained: bool = True, drop_path: float = 0.1,
+                 device: str = "cuda"):
         super().__init__()
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -65,11 +68,15 @@ class FlexFormer(nn.Module):
                     adapt_input_conv(n_input_channel, self.model.patch_embed.proj.weight))
                 self.model.patch_embed.proj.in_channels = n_input_channel
 
-
         patch_size = torch.tensor(patch_size)
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
+            if drop_path > 0.:
+                for l in range(len(blocks)):
+                    if hasattr(blocks[l], 'drop_path'):
+                        blocks[l].drop_path = pf.DropPath(drop_path)
+
             stage_patch_size = patch_size / (4 * 2 ** i)
-            if stage_patch_size.prod() > 64: # apply local self attention only when it is worth it
+            if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
                 block_mask = self.generate_block_mask(num_heads, 3, stage_patch_size, device)
             else:
                 # print(f'Skipping stage {i}')
@@ -105,7 +112,20 @@ class FlexFormer(nn.Module):
         return block_mask
 
 
+# is not recommended to use this class, since the block mask is calculated for each block (in FlexFormer it is done once per stage)
+class FlexTokenBlock(pf.PoolFormerBlock):
+    def __init__(self, n_heads: int, patch_size: List[int], device: str, dim: int, pool_size: int = 3,
+                 mlp_ratio: int = 4.,
+                 act_layer: nn.Module = nn.GELU, norm_layer: nn.Module = pf.GroupNorm,
+                 drop: float = 0., drop_path: float = 0.,
+                 use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5):
+        super().__init__(dim, pool_size, mlp_ratio, act_layer, norm_layer, drop, drop_path, use_layer_scale,
+                         layer_scale_init_value)
+        block_mask = FlexFormer.generate_block_mask(n_heads, pool_size, torch.tensor(patch_size), device)
+        self.token_mixer = FlexTokenMixer(dim, n_heads, block_mask)
+
+
 if __name__ == '__main__':
-    f = FlexFormer(2, [224, 224], 4, device='cuda').cuda()
+    f = FlexFormer(10, 3, [224, 224], 4).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)

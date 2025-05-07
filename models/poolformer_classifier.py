@@ -10,7 +10,7 @@ from models.classifier_base import ClassifierBase
 
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05):
+                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05, drop_path: float = 0.1):
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -21,6 +21,12 @@ class PoolFormerClassifier(ClassifierBase):
         self.model.patch_embed.proj.weight = nn.Parameter(
             adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
         self.model.patch_embed.proj.in_channels = self.n_channels
+
+        if drop_path > 0.0:
+            for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
+                for l in range(len(blocks)):
+                    if hasattr(blocks[l], 'drop_path'):
+                        blocks[l].drop_path = pf.DropPath(drop_path)
 
         self.save_hyperparameters()
 
@@ -55,11 +61,11 @@ class PoolFormerClassifier(ClassifierBase):
 
 class FlexFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224):
+                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1):
         super().__init__(dataset_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name,
-                                pretrained)
+                                pretrained, drop_path)
 
         self.save_hyperparameters()
 
