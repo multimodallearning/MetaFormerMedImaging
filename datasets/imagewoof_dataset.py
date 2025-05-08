@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from torchvision.io import read_image, ImageReadMode
 from tqdm import tqdm
+from torch.nn import functional as F
 
 
 # taken from https://discuss.pytorch.org/t/how-to-resize-and-pad-in-a-torchvision-transforms-compose/71850/4
@@ -17,8 +18,8 @@ class SquarePad:
         max_wh = max([w, h])
         hp = int((max_wh - w) / 2)
         vp = int((max_wh - h) / 2)
-        padding = (hp, vp, hp, vp)
-        return F.pad(image, padding, 0, 'constant')
+        padding = (hp, vp)
+        return F.pad(image, padding, value=0, mode='constant')
 
 
 # get dataset from https://github.com/fastai/imagenette#imagewoof
@@ -42,7 +43,7 @@ class ImageWoofDataset(Dataset):
             transforms.Resize((img_size, img_size)),
             transforms.Lambda(lambda img: img.float().div(255.0))
         ])
-        #available_files = available_files[:128*4]  # limit for testing
+        # available_files = available_files[:128*4]  # limit for testing
         for file in tqdm(available_files, desc=f'loading {mode} dataset', unit='img'):
             label = self.IMGNET_LABEL.index(file.parent.name)
             img = read_image(str(file), ImageReadMode.RGB)
@@ -60,19 +61,21 @@ class ImageWoofDataset(Dataset):
     def __getitem__(self, idx):
         img, lbl, filename = self.data[idx]['image'], self.data[idx]['label'], self.data[idx]['filename']
 
-        return img, lbl#, filename
+        return img, lbl  # , filename
 
 
 class ImageWoofDataModule(LightningDataModule):
-    def __init__(self, batch_size: int = 128, spatial_size: int = 224, use_data_aug: bool = True, n: int = 2, m: int = 9):
+    def __init__(self, batch_size: int = 128, spatial_size: int = 224, use_data_aug: bool = True,
+                 data_aug_std: float = 0.06):
         super().__init__()
         self.spatial_size = spatial_size
         self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
 
         self.use_data_aug = use_data_aug
-        self.data_aug = augmentation.auto.RandAugment(n=n, m=m, transformation_matrix_mode='skip')
+        self.data_aug_std = data_aug_std
 
-        self.normalize = augmentation.Normalize(mean=[0.3677, 0.3448, 0.2981], std=[0.3043, 0.2908, 0.2799])
+        self.mean = torch.tensor([0.3677, 0.3448, 0.2981]).view(1, 3, 1, 1)
+        self.std = torch.tensor([0.3043, 0.2908, 0.2799]).view(1, 3, 1, 1)
 
     def setup(self, stage: str = None):
         if stage == 'fit':
@@ -94,9 +97,17 @@ class ImageWoofDataModule(LightningDataModule):
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
         x, y = batch
+
         if self.use_data_aug and self.trainer.training:
-            x = self.data_aug(x)
-        x = self.normalize(x)
+            id = torch.eye(2, 3, device=x.device).unsqueeze(0)
+            rnd_offset = torch.randn(x.shape[0], 2, 3, device=x.device).mul(self.data_aug_std)
+            grid = F.affine_grid(id + rnd_offset, list(x.shape), align_corners=False)
+            x = F.grid_sample(x, grid, align_corners=False)
+
+        self.mean = self.mean.to(x)
+        self.std = self.std.to(x)
+        x = (x - self.mean) / self.std
+
         return x, y
 
 
