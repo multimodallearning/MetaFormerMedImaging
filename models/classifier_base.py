@@ -10,11 +10,11 @@ from medmnist import INFO
 from medmnist.dataset import MedMNIST2D, MedMNIST3D
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import LRSchedulerTypeUnion
+from timm.scheduler import CosineLRScheduler
 from torch import nn
 from torchmetrics import classification, MetricCollection, MeanMetric
-from timm.scheduler import CosineLRScheduler
-from datasets.imagewoof_dataset import ImageWoofDataset
 
+from datasets.imagewoof_dataset import ImageWoofDataset
 from datasets.med_mnist_statistics import LOSS_WEIGHTS
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -38,7 +38,7 @@ class ClassifierBase(LightningModule):
             loss_weights = torch.tensor(LOSS_WEIGHTS[ds_name.lower()])
         elif ds_name.lower() == "imagewoof":
             self.n_channels = 3
-            self.label = ImageWoofDataset.LABEL # placeholders
+            self.label = ImageWoofDataset.LABEL  # placeholders
             self.n_classes = len(self.label)
             self.is_2d = True
             task = "multi-class"
@@ -64,9 +64,9 @@ class ClassifierBase(LightningModule):
         self.train_metrics = MetricCollection({
             "acc": classification.Accuracy(**metrics_kwargs),
             "f1": classification.F1Score(**metrics_kwargs),
-            "prec": classification.Precision(**metrics_kwargs),
-            "rec": classification.Recall(**metrics_kwargs),
-            "auroc": classification.AUROC(**metrics_kwargs),
+            # "prec": classification.Precision(**metrics_kwargs),
+            # "rec": classification.Recall(**metrics_kwargs),
+            # "auroc": classification.AUROC(**metrics_kwargs),
         }, postfix='/train')
         self.val_metrics = self.train_metrics.clone(postfix='/val')
         self.train_loss = MeanMetric()
@@ -110,28 +110,26 @@ class ClassifierBase(LightningModule):
             getattr(self, f"{mode}_loss")(loss)
             metrics = getattr(self, f"{mode}_metrics")
             if self.cls_mtl_exclude:
-                batch_values = metrics(y_hat.softmax(1), y.long())
+                metrics(y_hat.softmax(1), y.long())
             else:
-                batch_values = metrics(y_hat.sigmoid(), y.long())
-
-            # metric logging for pytorch lightning to enable selection of best model
-            logg_kwargs = {"on_step": False, "on_epoch": True, "batch_size": len(y), 'logger': Logger.current_logger()}
-            for name, value in batch_values.items():
-                self.log(name, value.mean(), **logg_kwargs)
+                metrics(y_hat.sigmoid(), y.long())
 
         return loss
 
-    def report_histogram(self, mode: str):
+    def eval_and_log(self, mode: str):
         if Logger.current_logger() is None:
             return
         loss_logger = getattr(self, f"{mode}_loss")
         metric_collection = getattr(self, f"{mode}_metrics")
 
-        # raise NotImplementedError("WHAT IS THIS???")
         Logger.current_logger().report_scalar('loss', mode, loss_logger.compute().cpu(), self.current_epoch)
 
         epoch_values = getattr(self, f"{mode}_metrics").compute()
         for name, value in epoch_values.items():
+            # metric logging for pytorch lightning to enable selection of best model
+            self.log(name, value.mean())
+
+            # logging in clearml
             name = name.split('/')[0]
             Logger.current_logger().report_histogram(name, mode, value.cpu().numpy(), self.current_epoch,
                                                      xaxis='class', yaxis=name, xlabels=self.label)
@@ -144,10 +142,10 @@ class ClassifierBase(LightningModule):
         return self.common_step(batch, "train")
 
     def on_train_epoch_end(self) -> None:
-        self.report_histogram('train')
+        self.eval_and_log('train')
 
     def validation_step(self, batch):
         return self.common_step(batch, "val")
 
     def on_validation_epoch_end(self) -> None:
-        self.report_histogram('val')
+        self.eval_and_log('val')

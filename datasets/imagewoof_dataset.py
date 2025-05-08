@@ -43,7 +43,7 @@ class ImageWoofDataset(Dataset):
             transforms.Resize((img_size, img_size)),
             transforms.Lambda(lambda img: img.float().div(255.0))
         ])
-        # available_files = available_files[:128*4]  # limit for testing
+        #available_files = available_files[:128*4]  # limit for testing
         for file in tqdm(available_files, desc=f'loading {mode} dataset', unit='img'):
             label = self.IMGNET_LABEL.index(file.parent.name)
             img = read_image(str(file), ImageReadMode.RGB)

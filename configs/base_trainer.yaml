@@ -6,6 +6,6 @@ max_epochs: 250
 callbacks:
   - class_path: "pytorch_lightning.callbacks.ModelCheckpoint"
     init_args:
-      monitor: "auroc/val"
+      monitor: "f1/val"
       mode: "max"
       filename: "best"

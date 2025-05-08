@@ -10,7 +10,8 @@ from models.classifier_base import ClassifierBase
 
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05, drop_path: float = 0.1):
+                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05,
+                 drop_path: float = 0.1):
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -80,19 +81,40 @@ class FlexFormerClassifier(ClassifierBase):
             model_name = model_name.replace('pool', 'flex')
             Task.current_task().set_name(f'{model_name}_{self.hparams.dataset_name}')
 
+    # def optimizer_step(self, *args, **kwargs):
+    #     """
+    #     Skipping updates in case of unstable gradients.
+    #     Based on https://github.com/Lightning-AI/lightning/issues/4956
+    #     """
+    #     # create generator for all gradients
+    #     grads = (p.grad for p in self.parameters() if p.grad is not None)
+    #
+    #     for g in grads:
+    #         if torch.isnan(g).any() or torch.isinf(g).any():
+    #             print("Detected NaN or Inf in gradients. Skipping optimizer step.")
+    #             # reset gradients
+    #             self.zero_grad(set_to_none=False)
+    #             break
+    #
+    #     super().optimizer_step(*args, **kwargs)
+
 
 if __name__ == '__main__':
     from datasets.imagewoof_dataset import ImageWoofDataModule
+    from datasets.med_mnist_dataset import MedMNISTDataModule
     from tqdm import trange
     from torch.nn import functional as F
+    from kornia.augmentation import auto
 
     poolformer = FlexFormerClassifier('imagewoof', 'poolformer_s12', patch_size=224).cuda()
-    #poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
+    # poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
     print(poolformer.model)
 
-    dm = ImageWoofDataModule(batch_size=128, use_data_aug=False, spatial_size=224)
+    dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
+    #dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
     dm.setup('fit')
     train_loader = iter(dm.train_dataloader())
+    data_aug = auto.AutoAugment(transformation_matrix_mode='skip')
 
     optim = torch.optim.Adam(poolformer.parameters(), lr=1e-4)
     loss_fn = nn.CrossEntropyLoss()
@@ -105,23 +127,28 @@ if __name__ == '__main__':
             print('Epoch finished, restarting')
             train_loader = iter(dm.train_dataloader())
             imgs, labels = next(train_loader)
-        affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
-                               (128, 3, 224, 224), align_corners=False)
-        x = F.grid_sample(imgs.cuda(), affine, align_corners=False)  # .expand(-1, 3, -1, -1)
-        label = labels.squeeze(-1).cuda()
+        x = imgs.cuda()
+        y = labels.squeeze(-1).cuda()
+        # affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
+        #                        (128, 3, 224, 224), align_corners=False)
+        # x = F.grid_sample(x, affine, align_corners=False)  # .expand(-1, 3, -1, -1)
+        # x = dm.data_aug(x)
+        # x = dm.normalize(x)
+        x, y = dm.on_after_batch_transfer((x, y), None)
+        #x = data_aug(x)
         optim.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             output = poolformer(x)
-            loss = loss_fn(output, label)
-        if loss.isnan():
-            print('Debug')
-            print('img', x.isnan().any())
-            print('y_hat', output.isnan().any())
-            print('y', label.isnan().any())
-            raise RuntimeError("Loss is NaN")
+            loss = loss_fn(output, y)
+        # if loss.isnan():
+        #     print('Debug')
+        #     print('img', x.isnan().any())
+        #     print('y_hat', output.isnan().any())
+        #     print('y', label.isnan().any())
+        #     raise RuntimeError("Loss is NaN")
         loss.backward()
         optim.step()
-        run_acc[i] = (output.argmax(1) == label).float().mean()
+        run_acc[i] = (output.argmax(1) == y).float().mean()
         run_loss[i] = loss.item()
         if (i % 50 == 40):
             print(i, run_loss[i - 30:i - 1].mean().item(), run_acc[i - 30:i - 1].mean().item())
