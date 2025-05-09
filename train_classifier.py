@@ -8,7 +8,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
 from models.cnn_classifier import CNNClassifier
-from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier
+from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier, MetaFormerClassifier
 from datasets.med_mnist_dataset import MedMNISTDataModule
 from datasets.imagewoof_dataset import ImageWoofDataModule
 

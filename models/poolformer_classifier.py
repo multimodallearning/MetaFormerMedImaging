@@ -4,6 +4,7 @@ from timm.models import adapt_input_conv
 from torch import nn
 
 from architectures import poolformer as pf
+from architectures import metaformer as mf
 from architectures.flex_token_mixer import FlexFormer
 from models.classifier_base import ClassifierBase
 
@@ -17,7 +18,7 @@ class PoolFormerClassifier(ClassifierBase):
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
         # adapt classifer
-        self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
+        self.model.head = nn.Linear(self.model.head.in_features, n_classes)
         # adapt first conv to new number of input channel
         self.model.patch_embed.proj.weight = nn.Parameter(
             adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
@@ -54,6 +55,37 @@ class PoolFormerClassifier(ClassifierBase):
         for param_dict in param_dicts:
             optimizer.add_param_group(param_dict)
         return [optimizer], schedulers
+
+    def on_fit_start(self) -> None:
+        if Task.current_task() is not None:
+            Task.current_task().set_name(f'{self.hparams.model_name}_{self.hparams.dataset_name}')
+
+
+class MetaFormerClassifier(ClassifierBase):
+    def __init__(self, dataset_name: str, model_name: str = 'metaformer_ppaa_s12_224', pretrained: bool = True,
+                 drop_path: float = 0.1):
+        super().__init__(dataset_name)
+        assert self.is_2d, "MetaFormer is only implemented for 2D datasets"
+        assert model_name in mf.model_urls, f"Model {model_name} not found in {mf.model_urls.keys()}"
+        self.model = getattr(mf, model_name)(pretrained=pretrained)
+        # adapt classifer
+        self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
+        # adapt first conv to new number of input channel
+        self.model.patch_embed.proj.weight = nn.Parameter(
+            adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
+        self.model.patch_embed.proj.in_channels = self.n_channels
+
+        if drop_path > 0.0:
+            for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
+                for l in range(len(blocks)):
+                    if hasattr(blocks[l], 'drop_path'):
+                        blocks[l].drop_path = pf.DropPath(drop_path)
+
+        self.save_hyperparameters()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y_hat = self.model(x)
+        return y_hat
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
@@ -111,7 +143,7 @@ if __name__ == '__main__':
     print(poolformer.model)
 
     dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
-    #dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
+    # dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
     dm.setup('fit')
     train_loader = iter(dm.train_dataloader())
     data_aug = auto.AutoAugment(transformation_matrix_mode='skip')
@@ -135,7 +167,7 @@ if __name__ == '__main__':
         # x = dm.data_aug(x)
         # x = dm.normalize(x)
         x, y = dm.on_after_batch_transfer((x, y), None)
-        #x = data_aug(x)
+        # x = data_aug(x)
         optim.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             output = poolformer(x)
