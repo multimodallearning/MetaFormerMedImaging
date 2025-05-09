@@ -21,7 +21,6 @@ done_4_full_atn = False
 for kernel_size in tqdm([3, 5, 7, 9], desc='Kernel'):
     for config in [(64, 128), (128, 64), (256, 32), (512, 16), (1024, 8), (2048, 4)]:
         n_channel, spatial_dim = config
-        n_channel = 64
         kernel_label = f'{kernel_size}²'
         spatial_label = f'{n_channel}x{spatial_dim}²'
 
