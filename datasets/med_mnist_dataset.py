@@ -1,11 +1,10 @@
 import medmnist
 import torch
-from kornia import augmentation
 from kornia.augmentation.auto import RandAugment
 from pytorch_lightning import LightningDataModule
 from torchvision.transforms import ToTensor
-from datasets import nnunet_data_aug
 
+from datasets import nnunet_data_aug
 from datasets.med_mnist_statistics import IMG_MEAN_STD, ALLOW_FLIPPING
 
 
@@ -33,7 +32,8 @@ class MedMNISTDataModule(LightningDataModule):
             raise ValueError(f"Unknown MedMNIST dataset class: {self.DataClass}")
 
         img_stats = IMG_MEAN_STD[dataset_name.lower()]
-        self.normalize = augmentation.Normalize(mean=img_stats.mean, std=img_stats.std)
+        self.mean = torch.tensor(img_stats.mean).view(1, -1, 1, 1)
+        self.std = torch.tensor(img_stats.std).view(1, -1, 1, 1)
 
     def setup(self, stage: str = None):
         ds_kwargs = {'root': './data', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
@@ -49,7 +49,7 @@ class MedMNISTDataModule(LightningDataModule):
         return torch.utils.data.DataLoader(self.train_dataset, shuffle=True, **self.dl_kwargs, drop_last=True)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_dataset, **self.dl_kwargs)
+        return torch.utils.data.DataLoader(self.val_dataset, **self.dl_kwargs, drop_last=True)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_dataset, **self.dl_kwargs)
@@ -58,7 +58,9 @@ class MedMNISTDataModule(LightningDataModule):
         x, y = batch
         if self.use_data_aug and self.trainer.training:
             x = self.data_aug(x)
-        x = self.normalize(x)
+        self.mean = self.mean.to(x)
+        self.std = self.std.to(x)
+        x = (x - self.mean) / self.std
         return x, y
 
 
