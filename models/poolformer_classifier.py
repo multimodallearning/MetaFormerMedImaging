@@ -1,19 +1,20 @@
 import torch
 from clearml import Task
+from pytorch_lightning.utilities import grad_norm
 from timm.models import adapt_input_conv
 from torch import nn
 
-from architectures import poolformer as pf
 from architectures import metaformer as mf
+from architectures import poolformer as pf
 from architectures.flex_token_mixer import FlexFormer
-from models.classifier_base import ClassifierBase
+from models.classifier_base import ClassifierBase, Logger
 
 
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05,
-                 drop_path: float = 0.1):
-        super().__init__(dataset_name)
+                 drop_path: float = 0.1, rw_percentage: float = 0.005):
+        super().__init__(dataset_name, rw_percentage=rw_percentage)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -60,6 +61,8 @@ class PoolFormerClassifier(ClassifierBase):
         if Task.current_task() is not None:
             Task.current_task().set_name(f'{self.hparams.model_name}_{self.hparams.dataset_name}')
 
+        super().on_fit_start()
+
 
 class MetaFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'metaformer_ppaa_s12_224', pretrained: bool = True,
@@ -94,8 +97,9 @@ class MetaFormerClassifier(ClassifierBase):
 
 class FlexFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1):
-        super().__init__(dataset_name, lr=lr)
+                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
+                 rw_percentage: float = 0.005):
+        super().__init__(dataset_name, lr=lr, rw_percentage=rw_percentage)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name,
                                 pretrained, drop_path)
@@ -112,6 +116,20 @@ class FlexFormerClassifier(ClassifierBase):
             model_name = self.hparams.model_name
             model_name = model_name.replace('pool', 'flex')
             Task.current_task().set_name(f'{model_name}_{self.hparams.dataset_name}')
+
+        super().on_fit_start()
+
+    # def on_before_optimizer_step(self, optimizer):
+    #     if Logger.current_logger() is None:
+    #         return
+    #
+    #     # Compute the 2-norm for each layer
+    #     # If using mixed precision, the gradients are already unscaled here
+    #     norms = grad_norm(self.model, norm_type=2)
+    #     for name, value in norms.items():
+    #         # logging in clearml
+    #         name = name.split('/')[-1]
+    #         Logger.current_logger().report_scalar(name, 'grad_norm_2', value, self.global_step)
 
     # def optimizer_step(self, *args, **kwargs):
     #     """
@@ -132,10 +150,8 @@ class FlexFormerClassifier(ClassifierBase):
 
 
 if __name__ == '__main__':
-    from datasets.imagewoof_dataset import ImageWoofDataModule
     from datasets.med_mnist_dataset import MedMNISTDataModule
     from tqdm import trange
-    from torch.nn import functional as F
     from kornia.augmentation.auto import AutoAugment
 
     poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
@@ -150,7 +166,7 @@ if __name__ == '__main__':
     train_loader = iter(dm.train_dataloader())
     data_aug = AutoAugment()
 
-    optim = torch.optim.Adam(poolformer.parameters(), lr=1e-3)
+    optim = torch.optim.Adam(poolformer.parameters(), lr=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     run_acc = torch.zeros(3000)
     run_loss = torch.zeros(3000)

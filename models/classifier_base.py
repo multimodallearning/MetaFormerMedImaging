@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.05, ce_label_smoothing: float = 0.1,
-                 warmup_epochs: int = 5, min_lr: float = 1e-5):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5, rw_percentage: float = None):
         super().__init__()
         # attributes
         self.is_2d = False
@@ -72,7 +72,8 @@ class ClassifierBase(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
+        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr,
+                                  reset_weights_percentage=rw_percentage)
         if Task.current_task() is not None:
             Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
@@ -89,6 +90,21 @@ class ClassifierBase(LightningModule):
         if Logger.current_logger() is not None:
             Logger.current_logger().report_scalar('learning rate', 'lr',
                                                   scheduler._get_lr(self.current_epoch)[0], self.current_epoch)
+
+    @torch.no_grad()
+    def on_fit_start(self) -> None:
+        scale = self.optim_hp.reset_weights_percentage
+        if scale is None:
+            return
+
+        assert 0 <= scale <= 1, "Reset weights percentage must be between 0 and 1"
+        print('Adding noise to pretrained weights...')
+        params = torch.cat([p.flatten() for p in self.parameters() if p.requires_grad])
+        sigma = torch.clamp(params, params.quantile(0.005), params.quantile(0.995)).std()
+        for p in self.parameters():
+            if p.requires_grad:
+                p.data = p.data + torch.randn_like(p) * sigma * scale
+
 
     @abstractmethod
     def forward(self, batch):

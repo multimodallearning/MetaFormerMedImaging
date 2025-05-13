@@ -60,7 +60,7 @@ class FlexFormer(nn.Module):
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
         if self.model.head.out_features != n_classes:
-            print('Replacing head for new numbers of classes.')
+            print('Replacing classifier head for new numbers of classes.')
             self.model.head = nn.Linear(self.model.head.in_features, n_classes)
             if n_input_channel != 3:
                 print('Reusing first conv weights and adapt to new number of input channel')
