@@ -18,7 +18,7 @@ class PoolFormerClassifier(ClassifierBase):
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
         # adapt classifer
-        self.model.head = nn.Linear(self.model.head.in_features, n_classes)
+        self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
         # adapt first conv to new number of input channel
         self.model.patch_embed.proj.weight = nn.Parameter(
             adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
@@ -136,19 +136,21 @@ if __name__ == '__main__':
     from datasets.med_mnist_dataset import MedMNISTDataModule
     from tqdm import trange
     from torch.nn import functional as F
-    from kornia.augmentation import auto
+    from kornia.augmentation.auto import AutoAugment
 
-    poolformer = FlexFormerClassifier('imagewoof', 'poolformer_s12', patch_size=224).cuda()
-    # poolformer = PoolFormerClassifier('OrganAMNIST').cuda()
+    poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
+    # poolformer = PoolFormerClassifier('imagewoof').cuda()
     print(poolformer.model)
 
-    dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
-    # dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
+    #dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
+    dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
+    dm.mean = dm.mean.cuda()
+    dm.std = dm.std.cuda()
     dm.setup('fit')
     train_loader = iter(dm.train_dataloader())
-    data_aug = auto.AutoAugment(transformation_matrix_mode='skip')
+    data_aug = AutoAugment()
 
-    optim = torch.optim.Adam(poolformer.parameters(), lr=1e-4)
+    optim = torch.optim.Adam(poolformer.parameters(), lr=1e-3)
     loss_fn = nn.CrossEntropyLoss()
     run_acc = torch.zeros(3000)
     run_loss = torch.zeros(3000)
@@ -162,22 +164,23 @@ if __name__ == '__main__':
         x = imgs.cuda()
         y = labels.squeeze(-1).cuda()
         # affine = F.affine_grid(torch.eye(2, 3).cuda().unsqueeze(0) + torch.randn(128, 2, 3).mul(0.06).cuda(),
-        #                        (128, 3, 224, 224), align_corners=False)
+        #                        (128, 1, 224, 224), align_corners=False)
         # x = F.grid_sample(x, affine, align_corners=False)  # .expand(-1, 3, -1, -1)
-        # x = dm.data_aug(x)
-        # x = dm.normalize(x)
-        x, y = dm.on_after_batch_transfer((x, y), None)
         # x = data_aug(x)
+
+        x = dm.data_aug(x)
+        x = (x - dm.mean) / dm.std
+
         optim.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             output = poolformer(x)
             loss = loss_fn(output, y)
-        # if loss.isnan():
-        #     print('Debug')
-        #     print('img', x.isnan().any())
-        #     print('y_hat', output.isnan().any())
-        #     print('y', label.isnan().any())
-        #     raise RuntimeError("Loss is NaN")
+        if loss.isnan():
+            print('Debug')
+            print('img', x.isnan().any())
+            print('y_hat', output.isnan().any())
+            print('y', y.isnan().any())
+            raise RuntimeError("Loss is NaN")
         loss.backward()
         optim.step()
         run_acc[i] = (output.argmax(1) == y).float().mean()
