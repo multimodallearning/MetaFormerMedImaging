@@ -23,9 +23,11 @@ class FlexTokenMixer(nn.Module):
         self.block_mask = block_mask
         self.learn_pos_emb = learn_pos_emb and (block_mask is not None)
         if self.learn_pos_emb:
-            _, H, L, _ = block_mask.shape
-            assert H == num_heads
-            self.pos_emb = nn.Parameter(torch.zeros(L))
+            L = block_mask.shape[-1]
+            pos_emb = torch.meshgrid([torch.linspace(-1, 1, int(L ** 0.5))] * 2, indexing='ij')
+            pos_emb = torch.stack(pos_emb, -1).view(1, -1, 2)  # (1, L, 2)
+            self.register_buffer('pos_emb', pos_emb)
+            self.pos_emb_proj = nn.Sequential(nn.Linear(2, 16), nn.LeakyReLU(), nn.Linear(16, num_channel))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16,
                                'num_stages': 2}  # todo would be nice to have this optimzed
 
@@ -36,10 +38,12 @@ class FlexTokenMixer(nn.Module):
         self.out_prof_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
 
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
         x_ = x.flatten(start_dim=2).transpose(1, 2)  # (B, C, H, W) -> (B, N, C)
+        if self.learn_pos_emb:
+            pos_emb_projected = self.pos_emb_proj(self.pos_emb)
+            x_ = x_ + pos_emb_projected
         q, k = F.linear(x_, self.in_proj_qk_weights, self.in_proj_qk_bias).chunk(2, dim=-1)
         v = F.linear(x_, self.in_proj_v_weights, self.in_proj_v_bias)
 
@@ -47,8 +51,8 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,
-                                     score_mod=self.add_pos_embed if self.learn_pos_emb else None)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options,
+                                     block_mask=self.block_mask)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
@@ -57,9 +61,6 @@ class FlexTokenMixer(nn.Module):
     @staticmethod
     def view4heads(x: torch.Tensor, num_heads: int) -> torch.Tensor:
         return x.unflatten(-1, (num_heads, -1)).transpose(2, 1)
-
-    def add_pos_embed(self, score, b, h, q_idx, kv_idx):
-        return score + self.pos_emb[q_idx]
 
 
 class FlexFormer(nn.Module):
@@ -95,7 +96,7 @@ class FlexFormer(nn.Module):
                 block_mask = None
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
-                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pe)
+                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=l==0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
