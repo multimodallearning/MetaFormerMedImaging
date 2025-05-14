@@ -16,10 +16,16 @@ def noscore(score, b, h, q_idx, kv_idx):
 
 
 class FlexTokenMixer(nn.Module):
-    def __init__(self, num_channel: int, num_heads: int, block_mask=None, eps: float = 0.02):
+    def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = True,
+                 eps: float = 0.02):
         super().__init__()
         self.num_heads = num_heads
         self.block_mask = block_mask
+        self.learn_pos_emb = learn_pos_emb and (block_mask is not None)
+        if self.learn_pos_emb:
+            _, H, L, _ = block_mask.shape
+            assert H == num_heads
+            self.pos_emb = nn.Parameter(torch.zeros(L))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16,
                                'num_stages': 2}  # todo would be nice to have this optimzed
 
@@ -29,6 +35,7 @@ class FlexTokenMixer(nn.Module):
         self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
         self.out_prof_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
@@ -40,8 +47,8 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options,
-                                     block_mask=self.block_mask)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,
+                                     score_mod=self.add_pos_embed if self.learn_pos_emb else None)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
@@ -51,11 +58,14 @@ class FlexTokenMixer(nn.Module):
     def view4heads(x: torch.Tensor, num_heads: int) -> torch.Tensor:
         return x.unflatten(-1, (num_heads, -1)).transpose(2, 1)
 
+    def add_pos_embed(self, score, b, h, q_idx, kv_idx):
+        return score + self.pos_emb[q_idx]
+
 
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], num_heads: int,
-                 model_name: str = "poolformer_s12", pretrained: bool = True, drop_path: float = 0.1,
-                 device: str = "cuda"):
+                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = True,
+                 drop_path: float = 0.1, device: str = "cuda"):
         super().__init__()
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -78,13 +88,14 @@ class FlexFormer(nn.Module):
             stage_patch_size = patch_size / (4 * 2 ** i)
             if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
                 block_mask = self.generate_block_mask(num_heads, 3, stage_patch_size, device)
+
             else:
                 # print(f'Skipping stage {i}')
                 # continue
                 block_mask = None
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
-                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask)
+                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -129,3 +140,5 @@ if __name__ == '__main__':
     f = FlexFormer(10, 3, [224, 224], 4).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
+    # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
+    # pass
