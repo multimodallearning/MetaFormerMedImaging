@@ -71,8 +71,8 @@ class FlexTokenMixer(nn.Module):
 
 
 class FlexFormer(nn.Module):
-    def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], num_heads: int,
-                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = True,
+    def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
+                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False,
                  drop_path: float = 0.1, device: str = "cuda"):
         super().__init__()
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -87,6 +87,7 @@ class FlexFormer(nn.Module):
                 self.model.patch_embed.proj.in_channels = n_input_channel
 
         patch_size = torch.tensor(patch_size)
+        embed_dim = self.model.patch_embed.proj.out_channels
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
             if drop_path > 0.:
                 for l in range(len(blocks)):
@@ -94,8 +95,10 @@ class FlexFormer(nn.Module):
                         blocks[l].drop_path = pf.DropPath(drop_path)
 
             stage_patch_size = patch_size / (4 * 2 ** i)
+            stage_embed_dim = embed_dim * 2 ** i if embed_dim * 2 ** i != 256 else 320 # handle outlier of stage 3
+            num_heads = stage_embed_dim // head_dim
             if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
-                block_mask = self.generate_block_mask(num_heads, 3, stage_patch_size, device)
+                block_mask = self.generate_block_mask(num_heads, kernel_size, stage_patch_size, device)
 
             else:
                 # print(f'Skipping stage {i}')
@@ -146,7 +149,7 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [224, 224], 4).cuda()
+    f = FlexFormer(10, 3, [224, 224], 3, 32).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
     # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')

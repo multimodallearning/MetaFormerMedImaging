@@ -13,7 +13,7 @@ from models.classifier_base import ClassifierBase, Logger
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05,
-                 drop_path: float = 0.1, rw_percentage: float = None):
+                 drop_path: float = 0.1, rw_percentage: float = 0.4):
         super().__init__(dataset_name, rw_percentage=rw_percentage)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -96,13 +96,13 @@ class MetaFormerClassifier(ClassifierBase):
 
 
 class FlexFormerClassifier(ClassifierBase):
-    def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 num_heads: int = 4, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
-                 rw_percentage: float = None, learn_pe: bool = False):
+    def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=3,
+                 head_dim: int = 32, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
+                 rw_percentage: float = 0.4, learn_pe: bool = False):
         super().__init__(dataset_name, lr=lr, rw_percentage=rw_percentage)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
-        self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size, patch_size], num_heads, model_name,
-                                pretrained, learn_pe, drop_path)
+        self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size] * 2, kernel_size, head_dim,
+                                model_name, pretrained, learn_pe, drop_path)
 
         self.save_hyperparameters()
 
