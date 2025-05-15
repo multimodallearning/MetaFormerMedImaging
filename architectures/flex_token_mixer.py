@@ -28,6 +28,7 @@ class FlexTokenMixer(nn.Module):
             pos_emb = torch.stack(pos_emb, -1).view(1, -1, 2)  # (1, L, 2)
             self.register_buffer('pos_emb', pos_emb)
             self.pos_emb_proj = nn.Sequential(nn.Linear(2, 16), nn.LeakyReLU(), nn.Linear(16, num_channel))
+            self.pos_emb_proj.apply(lambda m: self.near_zero_init(m, eps))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16,
                                'num_stages': 2}  # todo would be nice to have this optimzed
 
@@ -37,6 +38,12 @@ class FlexTokenMixer(nn.Module):
         self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
         self.out_prof_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
+
+    @staticmethod
+    def near_zero_init(m: nn.Module, var: float):
+        if isinstance(m, nn.Linear):
+            nn.init.normal_(m.weight, 0, var)
+            nn.init.constant_(m.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
@@ -96,7 +103,8 @@ class FlexFormer(nn.Module):
                 block_mask = None
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
-                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=l==0)
+                enable_pe = (l==0) and learn_pe
+                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
