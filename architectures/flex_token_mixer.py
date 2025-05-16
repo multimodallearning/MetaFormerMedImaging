@@ -7,6 +7,7 @@ from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 from architectures import poolformer as pf
 from timm.models import adapt_input_conv
+from models.classifier_base import ClassifierBase
 
 flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
 
@@ -16,8 +17,16 @@ def noscore(score, b, h, q_idx, kv_idx):
 
 
 class FlexTokenMixer(nn.Module):
-    def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = True,
+    def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = False,
                  eps: float = 0.02):
+        """
+        FlexTokenMixer with local self-attention to replace AvgPool in PoolFormer. It is initialized to mimic AvgPool.
+        :param num_channel: input channel and output channel
+        :param num_heads: number of heads used in attention
+        :param block_mask: precomputed block mask for local attention
+        :param learn_pos_emb: if True, a two-layer MLP on normalized coordinates as learnable position embedding is used
+        :param eps: std of the normal distribution used to initialize weights
+        """
         super().__init__()
         self.num_heads = num_heads
         self.block_mask = block_mask
@@ -73,7 +82,21 @@ class FlexTokenMixer(nn.Module):
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
                  model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False,
-                 drop_path: float = 0.1, device: str = "cuda"):
+                 drop_path: float = 0.1, rw_percentage: float = 0.4, device: str = "cuda"):
+        """
+        Replace AvgPool in PoolFormer with local self-attention.
+        :param n_classes: number of classes for classification head
+        :param n_input_channel: number of image's input channels
+        :param patch_size: size of the image
+        :param kernel_size: size of the local attention kernel
+        :param head_dim: number of dimensions per head
+        :param model_name: poolformer model name to use
+        :param pretrained: rather to use pretrained weights of poolformer or not
+        :param learn_pe: use learnable position embedding in all attention blocks
+        :param drop_path: stochastic depth rate
+        :param rw_percentage: percentage of weights to reset
+        :param device: device to use for computation. Has to be given due to block mask generation and compilation
+        """
         super().__init__()
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -86,6 +109,9 @@ class FlexFormer(nn.Module):
                     adapt_input_conv(n_input_channel, self.model.patch_embed.proj.weight))
                 self.model.patch_embed.proj.in_channels = n_input_channel
 
+        # resetting pretrained weights
+        ClassifierBase.reset_pretrained_weights(self.model, rw_percentage)
+
         patch_size = torch.tensor(patch_size)
         embed_dim = self.model.patch_embed.proj.out_channels
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
@@ -95,7 +121,7 @@ class FlexFormer(nn.Module):
                         blocks[l].drop_path = pf.DropPath(drop_path)
 
             stage_patch_size = patch_size / (4 * 2 ** i)
-            stage_embed_dim = embed_dim * 2 ** i if embed_dim * 2 ** i != 256 else 320 # handle outlier of stage 3
+            stage_embed_dim = embed_dim * 2 ** i if embed_dim * 2 ** i != 256 else 320  # handle outlier of stage 3
             num_heads = stage_embed_dim // head_dim
             if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
                 block_mask = self.generate_block_mask(num_heads, kernel_size, stage_patch_size, device)
@@ -103,10 +129,10 @@ class FlexFormer(nn.Module):
             else:
                 # print(f'Skipping stage {i}')
                 # continue
-                block_mask = None
+                block_mask = None  # apply global self attention
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
-                enable_pe = (l==0) and learn_pe
+                enable_pe = (l == 0) and learn_pe
                 blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

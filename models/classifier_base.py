@@ -91,17 +91,17 @@ class ClassifierBase(LightningModule):
             Logger.current_logger().report_scalar('learning rate', 'lr',
                                                   scheduler._get_lr(self.current_epoch)[0], self.current_epoch)
 
+    @staticmethod
     @torch.no_grad()
-    def on_fit_start(self) -> None:
-        scale = self.optim_hp.reset_weights_percentage
-        if scale is None:
+    def reset_pretrained_weights(model:nn.Module, scale:float) -> None:
+        if scale is None or scale == 0:
             return
 
         assert 0 <= scale <= 1, "Reset weights percentage must be between 0 and 1"
         print('Adding noise to pretrained weights...')
-        params = torch.cat([p.flatten() for p in self.parameters() if p.requires_grad])
+        params = torch.cat([p.flatten() for p in model.parameters() if p.requires_grad])
         sigma = torch.clamp(params, params.quantile(0.005), params.quantile(0.995)).std()
-        for p in self.parameters():
+        for p in model.parameters():
             if p.requires_grad:
                 p.data = p.data + torch.randn_like(p) * sigma * scale
 

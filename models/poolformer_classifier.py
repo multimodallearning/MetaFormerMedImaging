@@ -6,7 +6,7 @@ from torch import nn
 
 from architectures import metaformer as mf
 from architectures import poolformer as pf
-from architectures.flex_token_mixer import FlexFormer
+from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
 from models.classifier_base import ClassifierBase, Logger
 
 
@@ -61,7 +61,7 @@ class PoolFormerClassifier(ClassifierBase):
         if Task.current_task() is not None:
             Task.current_task().set_name(f'{self.hparams.model_name}_{self.hparams.dataset_name}')
 
-        super().on_fit_start()
+        super().reset_pretrained_weights(self.model, self.hparams.rw_percentage)
 
 
 class MetaFormerClassifier(ClassifierBase):
@@ -99,7 +99,7 @@ class FlexFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=3,
                  head_dim: int = 32, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
                  rw_percentage: float = 0.4, learn_pe: bool = False):
-        super().__init__(dataset_name, lr=lr, rw_percentage=rw_percentage)
+        super().__init__(dataset_name, lr=lr, rw_percentage=None) # reset weights is done in FlexFormer
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size] * 2, kernel_size, head_dim,
                                 model_name, pretrained, learn_pe, drop_path)
@@ -117,7 +117,7 @@ class FlexFormerClassifier(ClassifierBase):
             model_name = model_name.replace('pool', 'flex')
             Task.current_task().set_name(f'{model_name}_{self.hparams.dataset_name}')
 
-        super().on_fit_start()
+        # resetting pretrained weights is done in FlexFormer
 
     # def on_before_optimizer_step(self, optimizer):
     #     if Logger.current_logger() is None:
