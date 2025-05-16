@@ -33,7 +33,7 @@ class CNNClassifier(ClassifierBase):
 class ConvFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  kernel: int = 3, depthwise: bool = False, drop_path: float = 0.1, rw_percentage: float = 0.4):
-        super().__init__(dataset_name, rw_percentage=rw_percentage)
+        super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -71,7 +71,7 @@ class ConvFormerClassifier(ClassifierBase):
 
 if __name__ == '__main__':
     from torchinfo import summary
-    m = ConvFormerClassifier('imagewoof', conv_kernel=5)
+    m = ConvFormerClassifier('imagewoof', kernel=3)
     print(m)
     x = torch.randn(8, 3, 224, 224)
     y_hat = m(x)

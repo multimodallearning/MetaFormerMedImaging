@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.05, ce_label_smoothing: float = 0.1,
-                 warmup_epochs: int = 5, min_lr: float = 1e-5, rw_percentage: float = None):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
         self.is_2d = False
@@ -72,8 +72,7 @@ class ClassifierBase(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr,
-                                  reset_weights_percentage=rw_percentage)
+        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
         if Task.current_task() is not None:
             Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
