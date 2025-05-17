@@ -32,7 +32,7 @@ class CNNClassifier(ClassifierBase):
 
 class ConvFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 kernel: int = 3, depthwise: bool = False, drop_path: float = 0.1, rw_percentage: float = 0.4):
+                 kernel: int = 3, depthwise: bool = True, drop_path: float = 0.1, rw_percentage: float = 0.4):
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -55,6 +55,9 @@ class ConvFormerClassifier(ClassifierBase):
                         num_channel = blocks[l].norm1.num_channels
                         blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel, padding=kernel // 2,
                                                           groups=num_channel if depthwise else 1, bias=False)
+                        if depthwise:
+                            # init as avgpool
+                            nn.init.constant_(blocks[l].token_mixer.weight, 1/(kernel**2))
 
         self.save_hyperparameters()
 
@@ -71,7 +74,7 @@ class ConvFormerClassifier(ClassifierBase):
 
 if __name__ == '__main__':
     from torchinfo import summary
-    m = ConvFormerClassifier('imagewoof', kernel=3)
+    m = ConvFormerClassifier('imagewoof', kernel=3, depthwise=True)
     print(m)
     x = torch.randn(8, 3, 224, 224)
     y_hat = m(x)
