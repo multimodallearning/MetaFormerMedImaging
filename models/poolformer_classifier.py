@@ -1,20 +1,18 @@
 import torch
 from clearml import Task
-from pytorch_lightning.utilities import grad_norm
 from timm.models import adapt_input_conv
 from torch import nn
 
 from architectures import metaformer as mf
 from architectures import poolformer as pf
-from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
-from models.classifier_base import ClassifierBase, Logger
+from architectures.flex_token_mixer import FlexFormer
+from models.classifier_base import ClassifierBase
 
 
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 train_poolformer: bool = True, lr_poolformer: float = 0.0001, weight_decay: float = 0.05,
-                 drop_path: float = 0.1, rw_percentage: float = 0.4):
-        super().__init__(dataset_name)
+                 lr:float = 1e-4, drop_path: float = 0.1, rw_percentage: float = 0.4):
+        super().__init__(dataset_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
@@ -36,26 +34,6 @@ class PoolFormerClassifier(ClassifierBase):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y_hat = self.model(x)
         return y_hat
-
-    def configure_optimizers(self):
-        self.model.requires_grad_(False)
-        param_dicts = [{"params": self.model.head.parameters()}, {"params": self.model.norm.parameters()}]
-        self.model.head.requires_grad_(True)
-        self.model.norm.requires_grad_(True)
-        if self.hparams.train_poolformer:
-            param_dicts.append({"params": self.model.network.parameters(), "lr": self.hparams.lr_poolformer})
-            self.model.network.requires_grad_(True)
-            param_dicts.append({"params": self.model.patch_embed.parameters(), "lr": self.hparams.lr_poolformer})
-            self.model.patch_embed.requires_grad_(True)
-
-        # use optimizer and scheduler from parent class
-        optimizers, schedulers = super().configure_optimizers()
-        assert len(optimizers) == 1, "Only one optimizer is supported"
-        optimizer = optimizers[0]
-        optimizer.param_groups = []
-        for param_dict in param_dicts:
-            optimizer.add_param_group(param_dict)
-        return [optimizer], schedulers
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
