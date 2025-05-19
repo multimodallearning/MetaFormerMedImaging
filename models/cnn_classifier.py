@@ -1,5 +1,6 @@
 import timm
 from clearml import Task
+from timm.models.resnet import ResNet
 
 from models.classifier_base import ClassifierBase
 from architectures import poolformer as pf
@@ -9,7 +10,7 @@ from timm.models import adapt_input_conv
 
 
 class CNNClassifier(ClassifierBase):
-    def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False):
+    def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False, kernel: int = 3):
         super().__init__(dataset_name)
         self.model_name = model
         self.ds_name = dataset_name
@@ -18,6 +19,16 @@ class CNNClassifier(ClassifierBase):
                                            in_chans=self.n_channels)
         elif self.is_3d:
             raise NotImplementedError("3D models not implemented yet")
+
+        if kernel != 3:
+            assert isinstance(self.model, ResNet), "Only ResNet models support kernel size adaptation"
+            for i in range(1, 5):
+                seq = getattr(self.model, f'layer{i}')
+                for j in range(len(seq)):
+                    seq[j].conv1 = nn.Conv2d(seq[j].conv1.in_channels, seq[j].conv1.out_channels, kernel_size=kernel,
+                                             stride=seq[j].conv1.stride, padding=kernel // 2, bias=False)
+                    seq[j].conv2 = nn.Conv2d(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel,
+                                             stride=seq[j].conv2.stride, padding=kernel // 2, bias=False)
 
         self.save_hyperparameters()
 
@@ -57,7 +68,7 @@ class ConvFormerClassifier(ClassifierBase):
                                                           groups=num_channel if depthwise else 1, bias=False)
                         if depthwise:
                             # init as avgpool
-                            nn.init.constant_(blocks[l].token_mixer.weight, 1/(kernel**2))
+                            nn.init.constant_(blocks[l].token_mixer.weight, 1 / (kernel ** 2))
 
         self.save_hyperparameters()
 
@@ -74,7 +85,8 @@ class ConvFormerClassifier(ClassifierBase):
 
 if __name__ == '__main__':
     from torchinfo import summary
-    m = ConvFormerClassifier('imagewoof', kernel=3, depthwise=True)
+
+    m = CNNClassifier('imagewoof', kernel=5)
     print(m)
     x = torch.randn(8, 3, 224, 224)
     y_hat = m(x)
