@@ -75,12 +75,12 @@ class MetaFormerClassifier(ClassifierBase):
 
 class FlexFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=3,
-                 head_dim: int = 32, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
+                 head_dim: int = 32, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1, use_slopes: bool = False,
                  rw_percentage: float = 0.4, learn_pe: bool = False):
         super().__init__(dataset_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size] * 2, kernel_size, head_dim,
-                                model_name, pretrained, learn_pe, drop_path, rw_percentage)
+                                model_name, pretrained, learn_pe, use_slopes, drop_path, rw_percentage)
 
         self.save_hyperparameters()
 

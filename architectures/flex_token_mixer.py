@@ -6,19 +6,16 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 from architectures import poolformer as pf
+from architectures import score_mode_functions
 from timm.models import adapt_input_conv
+
 from models.classifier_base import ClassifierBase
 
 flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
 
-
-def noscore(score, b, h, q_idx, kv_idx):
-    return score * 0 + 1
-
-
 class FlexTokenMixer(nn.Module):
     def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = False,
-                 eps: float = 0.02):
+                 use_slopes: bool = False, eps: float = 0.02):
         """
         FlexTokenMixer with local self-attention to replace AvgPool in PoolFormer. It is initialized to mimic AvgPool.
         :param num_channel: input channel and output channel
@@ -30,10 +27,16 @@ class FlexTokenMixer(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.block_mask = block_mask
+        if block_mask is not None:
+            L = block_mask.shape[-1]
+            patch_size = int(L ** 0.5)
+        if use_slopes and block_mask is not None:
+            self.score_mod_fn = getattr(score_mode_functions, f'wrapper_s4_{patch_size}')
+        else:
+            self.score_mod_fn = None
         self.learn_pos_emb = learn_pos_emb and (block_mask is not None)
         if self.learn_pos_emb:
-            L = block_mask.shape[-1]
-            pos_emb = torch.meshgrid([torch.linspace(-1, 1, int(L ** 0.5))] * 2, indexing='ij')
+            pos_emb = torch.meshgrid([torch.linspace(-1, 1, patch_size)] * 2, indexing='ij')
             pos_emb = torch.stack(pos_emb, -1).view(1, -1, 2)  # (1, L, 2)
             self.register_buffer('pos_emb', pos_emb)
             self.pos_emb_proj = nn.Sequential(nn.Linear(2, 16), nn.LeakyReLU(), nn.Linear(16, num_channel))
@@ -67,8 +70,8 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options,
-                                     block_mask=self.block_mask)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,
+                                     score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
@@ -81,7 +84,7 @@ class FlexTokenMixer(nn.Module):
 
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
-                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False,
+                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False, use_slopes: bool = False,
                  drop_path: float = 0.1, rw_percentage: float = 0.4, device: str = "cuda"):
         """
         Replace AvgPool in PoolFormer with local self-attention.
@@ -93,11 +96,14 @@ class FlexFormer(nn.Module):
         :param model_name: poolformer model name to use
         :param pretrained: rather to use pretrained weights of poolformer or not
         :param learn_pe: use learnable position embedding in all attention blocks
+        :param use_slopes: use slopes in directed local attention
         :param drop_path: stochastic depth rate
         :param rw_percentage: percentage of weights to reset
         :param device: device to use for computation. Has to be given due to block mask generation and compilation
         """
         super().__init__()
+        if use_slopes and head_dim != 16:
+            raise ValueError(f"head_dim has to be 16 for slopes, but is {head_dim}")
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
         if self.model.head.out_features != n_classes:
@@ -133,7 +139,8 @@ class FlexFormer(nn.Module):
             for l in range(len(blocks)):
                 num_channel = blocks[l].norm1.num_channels
                 enable_pe = (l == 0) and learn_pe
-                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe)
+                blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe,
+                                                       use_slopes=use_slopes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -175,7 +182,7 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [224, 224], 3, 32).cuda()
+    f = FlexFormer(10, 3, [224, 224], 7, 32).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
     # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
