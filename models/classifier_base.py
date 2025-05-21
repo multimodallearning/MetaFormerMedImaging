@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class ClassifierBase(LightningModule):
-    def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.05, ce_label_smoothing: float = 0.1,
+    def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01, ce_label_smoothing: float = 0.1,
                  warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
@@ -38,7 +38,7 @@ class ClassifierBase(LightningModule):
             loss_weights = torch.tensor(LOSS_WEIGHTS[ds_name.lower()])
         elif ds_name.lower() == "imagewoof":
             self.n_channels = 3
-            self.label = ImageWoofDataset.LABEL  # placeholders
+            self.label = ImageWoofDataset.LABEL
             self.n_classes = len(self.label)
             self.is_2d = True
             task = "multi-class"
@@ -48,10 +48,10 @@ class ClassifierBase(LightningModule):
 
         assert self.is_2d != self.is_3d, "Either 2D or 3D dataset must be selected"
         # criterion
-        if task in ["multi-label", "binary-class"]:
+        if task.split(',')[0] == 'multi-label':
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
             self.cls_mtl_exclude = False
-        elif task == "multi-class":
+        elif task in ['multi-class', 'binary-class']:
             self.criterion = nn.CrossEntropyLoss(weight=loss_weights, label_smoothing=ce_label_smoothing)
             self.cls_mtl_exclude = True
         else:
@@ -60,7 +60,7 @@ class ClassifierBase(LightningModule):
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
-                          "task": 'multiclass' if task == "multi-class" else 'multilabel'}
+                          "task": 'multiclass' if self.cls_mtl_exclude else 'multilabel'}
         self.train_metrics = MetricCollection({
             "acc": classification.Accuracy(**metrics_kwargs),
             "f1": classification.F1Score(**metrics_kwargs),
@@ -112,12 +112,10 @@ class ClassifierBase(LightningModule):
     def common_step(self, batch, mode):
         x, y = batch
         y_hat = self.forward(x)
-        y = y.squeeze(-1)
-        if not self.cls_mtl_exclude:  # convert indices to probabilities
-            raise NotImplementedError('Check for correctness, before using it')
-            p = torch.zeros(len(y), self.n_classes, device=y.device)
-            p.scatter_(1, y.unsqueeze(1), 1)
-            y = p
+        if self.cls_mtl_exclude:
+            y = y.squeeze(-1) # handle case of (B, 1) of binary classification (rewritten as multi-class)
+        else: # multi-label, where y holds probabilities
+            y = y.float()
         loss = self.criterion(y_hat, y)
 
         with torch.no_grad():
@@ -125,7 +123,7 @@ class ClassifierBase(LightningModule):
             getattr(self, f"{mode}_loss")(loss)
             metrics = getattr(self, f"{mode}_metrics")
             if self.cls_mtl_exclude:
-                metrics(y_hat.softmax(1), y.long())
+                metrics(y_hat.argmax(1), y.long())
             else:
                 metrics(y_hat.sigmoid(), y.long())
 
