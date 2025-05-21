@@ -47,5 +47,6 @@ elif task_type.split(',')[0] == 'multi-label':
     weight = neg / pos
 else:
     raise ValueError(f"Unknown task type: {task_type}")
+weight /= weight.min()
 print('label counts', lbl_cnt.tolist())
 print('loss weight', list_print(weight))

@@ -33,15 +33,15 @@ class nnUNetDataAugmentation3D:
             return x
 
     @staticmethod
-    def _random_brightness(x: torch.Tensor, brightness: float = 0.0, p: float = 0.5) -> torch.Tensor:
+    def _random_brightness(x: torch.Tensor, brightness: torch.Tensor, p: float = 0.5) -> torch.Tensor:
         # only apply brightness with probability p
         if torch.rand(1) < p:
-            return x.mul(brightness).clamp(0, 1)
+            return x.mul(brightness.view(-1, *[1]*(x.ndim-1))).clamp(0, 1)
         else:
             return x
 
     @staticmethod
-    def _random_contrast(x: torch.Tensor, contrast: float = 1.0, p: float = 0.5) -> torch.Tensor:
+    def _random_contrast(x: torch.Tensor, contrast: torch.Tensor, p: float = 0.5) -> torch.Tensor:
         # only apply contrast with probability p
         if torch.rand(1) < p:
             return enhance.adjust_contrast(x, contrast, clip_output=True)
