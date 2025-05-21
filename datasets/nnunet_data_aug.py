@@ -3,6 +3,8 @@ from kornia import augmentation as K
 from kornia import enhance
 from kornia.augmentation import random_generator as rg
 from kornia.augmentation.utils import _range_bound
+from torch.nn import functional as F
+from random import uniform
 
 
 class nnUNetDataAugmentation3D:
@@ -18,7 +20,7 @@ class nnUNetDataAugmentation3D:
 
         # random generator for the data augmentation
         brightness = _range_bound((0.75, 1.25), "brightness", center=1.0, bounds=(0.0, 2.0))
-        contrast = _range_bound((0.75, 1.25), "contrast", center=1.0)
+        contrast = _range_bound((0.75, 1.25), "contrast", center=1.0, bounds=(0.0, 2.0))
         self.param_generator = rg.PlainUniformGenerator((brightness, "brightness_factor", None, None),
                                                         (contrast, "contrast_factor", None, None))
 
@@ -34,7 +36,7 @@ class nnUNetDataAugmentation3D:
     def _random_brightness(x: torch.Tensor, brightness: float = 0.0, p: float = 0.5) -> torch.Tensor:
         # only apply brightness with probability p
         if torch.rand(1) < p:
-            return enhance.adjust_brightness(x, brightness, clip_output=True)
+            return x.mul(brightness).clamp(0, 1)
         else:
             return x
 
@@ -43,6 +45,17 @@ class nnUNetDataAugmentation3D:
         # only apply contrast with probability p
         if torch.rand(1) < p:
             return enhance.adjust_contrast(x, contrast, clip_output=True)
+        else:
+            return x
+
+    @staticmethod
+    def _random_simulate_low_resolution(x: torch.Tensor, scale:float, p:float=0.5) -> torch.Tensor:
+        if torch.rand(1) < p:
+            orig_size = x.shape[2:]
+            down_sampled = F.interpolate(x, scale_factor=scale, mode="nearest-exact")
+            up_sampled = F.interpolate(down_sampled, size=orig_size, align_corners=True,
+                                       mode="bilinear" if x.ndim == 4 else "trilinear")
+            return up_sampled
         else:
             return x
 
@@ -95,6 +108,8 @@ class nnUNetDataAugmentation3D:
         data = self.affine_da(data)
         if self.flipping:
             data = self.flipping(data)
+        scale = uniform(0.5, 1.)
+        data = self._random_simulate_low_resolution(data, scale, p=0.25)
 
         # intensity augmentation
         data = self._random_gaussian_noise(data, std=0.1, p=0.1)
@@ -111,7 +126,6 @@ class nnUNetDataAugmentation3D:
 class nnUNetDataAugmentation2D(nnUNetDataAugmentation3D):
     def __init__(self, allow_flip: bool = True):
         super().__init__(allow_flip)
-        self.is_3d = False
         # overwrite spatial augmentation with 2D augmentations
         self.rot_da = K.RandomRotation(degrees=30, p=0.2)
         self.affine_da = K.RandomAffine(degrees=0, translate=(0,) * 2, scale=(0.7, 1.4), p=0.2)
