@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01, ce_label_smoothing: float = 0.1,
-                 warmup_epochs: int = 5, min_lr: float = 1e-5):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5, loss_weight_max: float = 10):
         super().__init__()
         # attributes
         self.is_2d = False
@@ -48,6 +48,7 @@ class ClassifierBase(LightningModule):
 
         assert self.is_2d != self.is_3d, "Either 2D or 3D dataset must be selected"
         # criterion
+        loss_weights = loss_weights.clamp(max=loss_weight_max)
         if task.split(',')[0] == 'multi-label':
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
             self.cls_mtl_exclude = False
@@ -72,7 +73,8 @@ class ClassifierBase(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
+        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr,
+                                  loss_weight_clamp_max=loss_weight_max)
         if Task.current_task() is not None:
             Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
@@ -92,7 +94,7 @@ class ClassifierBase(LightningModule):
 
     @staticmethod
     @torch.no_grad()
-    def reset_pretrained_weights(model:nn.Module, scale:float) -> None:
+    def reset_pretrained_weights(model: nn.Module, scale: float) -> None:
         if scale is None or scale == 0:
             return
 
@@ -104,7 +106,6 @@ class ClassifierBase(LightningModule):
             if p.requires_grad:
                 p.data = p.data + torch.randn_like(p) * sigma * scale
 
-
     @abstractmethod
     def forward(self, batch):
         pass
@@ -113,8 +114,8 @@ class ClassifierBase(LightningModule):
         x, y = batch
         y_hat = self.forward(x)
         if self.cls_mtl_exclude:
-            y = y.squeeze(-1) # handle case of (B, 1) of binary classification (rewritten as multi-class)
-        else: # multi-label, where y holds probabilities
+            y = y.squeeze(-1)  # handle case of (B, 1) of binary classification (rewritten as multi-class)
+        else:  # multi-label, where y holds probabilities
             y = y.float()
         loss = self.criterion(y_hat, y)
 

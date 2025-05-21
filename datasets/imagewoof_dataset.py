@@ -28,8 +28,7 @@ class ImageWoofDataset(Dataset):
                     'n02105641', 'n02111889', 'n02115641']
     LABEL = ['Shih-Tzu', 'Rhodesian ridgeback', 'Beagle', 'English foxhound', 'Border terrier', 'Australian terrier',
              'Golden retriever', 'Old English sheepdog', 'Samoyed', 'Dingo']
-    LOSS_WEIGHTS = [3.0969114303588867, 3.0952672958374023, 3.111828565597534, 3.944660186767578, 3.0838305950164795,
-                    3.093625545501709, 3.0838305950164795, 3.118527889251709, 3.130356550216675, 3.0985584259033203]
+    LOSS_WEIGHTS = [1.0042, 1.0037, 1.0091, 1.2791, 1.0000, 1.0032, 1.0000, 1.0113, 1.0151, 1.0048]
 
     def __init__(self, mode: str, img_size: int = 224):
         super().__init__()
