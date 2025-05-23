@@ -116,7 +116,8 @@ class FlexFormer(nn.Module):
                 self.model.patch_embed.proj.in_channels = n_input_channel
 
         # resetting pretrained weights
-        ClassifierBase.reset_pretrained_weights(self.model, rw_percentage)
+        if pretrained:
+            ClassifierBase.reset_pretrained_weights(self.model, rw_percentage)
 
         patch_size = torch.tensor(patch_size)
         embed_dim = self.model.patch_embed.proj.out_channels

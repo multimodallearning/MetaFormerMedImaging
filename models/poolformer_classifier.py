@@ -39,7 +39,8 @@ class PoolFormerClassifier(ClassifierBase):
         if Task.current_task() is not None:
             Task.current_task().set_name(f'{self.hparams.model_name}_{self.hparams.dataset_name}')
 
-        super().reset_pretrained_weights(self.model, self.hparams.rw_percentage)
+        if self.hparams.pretrained:
+            super().reset_pretrained_weights(self.model, self.hparams.rw_percentage)
 
 
 class MetaFormerClassifier(ClassifierBase):
