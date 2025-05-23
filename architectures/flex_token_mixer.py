@@ -1,8 +1,9 @@
 from typing import List, Any
+import math
 
 import torch
 from torch import nn
-from torch.nn import functional as F
+from torch.nn import functional as F, init
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 from architectures import poolformer as pf
@@ -48,7 +49,7 @@ class FlexTokenMixer(nn.Module):
         self.in_proj_qk_bias = nn.Parameter(torch.zeros(2 * num_channel))
         self.in_proj_v_weights = nn.Parameter(torch.eye(num_channel))
         self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
-        self.out_prof_weights = nn.Parameter(torch.eye(num_channel))
+        self.out_proj_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
 
     @staticmethod
@@ -56,6 +57,17 @@ class FlexTokenMixer(nn.Module):
         if isinstance(m, nn.Linear):
             nn.init.normal_(m.weight, 0, var)
             nn.init.constant_(m.bias, 0)
+
+    # adapted from nn.Linear.reset_parameters()
+    def random_init(self) -> None:
+        for layer_name in ['in_proj_qk', 'in_proj_v', 'out_proj']:
+            weights = getattr(self, f'{layer_name}_weights')
+            init.kaiming_uniform_(weights, a=math.sqrt(5))
+
+            bias = getattr(self, f'{layer_name}_bias')
+            fan_in, _ = init._calculate_fan_in_and_fan_out(weights)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            init.uniform_(bias, -bound, bound)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         H, W = x.shape[-2:]
@@ -70,10 +82,10 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,
-                                     score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,)
+                                     #score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
-        y_ = F.linear(y_, self.out_prof_weights, self.out_proj_bias)
+        y_ = F.linear(y_, self.out_proj_weights, self.out_proj_bias)
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
         return y - x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
 
@@ -109,11 +121,11 @@ class FlexFormer(nn.Module):
         if self.model.head.out_features != n_classes:
             print('Replacing classifier head for new numbers of classes.')
             self.model.head = nn.Linear(self.model.head.in_features, n_classes)
-            if n_input_channel != 3:
-                print('Reusing first conv weights and adapt to new number of input channel')
-                self.model.patch_embed.proj.weight = nn.Parameter(
-                    adapt_input_conv(n_input_channel, self.model.patch_embed.proj.weight))
-                self.model.patch_embed.proj.in_channels = n_input_channel
+        if n_input_channel != 3:
+            print('Reusing first conv weights and adapt to new number of input channel')
+            self.model.patch_embed.proj.weight = nn.Parameter(
+                adapt_input_conv(n_input_channel, self.model.patch_embed.proj.weight))
+            self.model.patch_embed.proj.in_channels = n_input_channel
 
         # resetting pretrained weights
         if pretrained:
@@ -142,6 +154,8 @@ class FlexFormer(nn.Module):
                 enable_pe = (l == 0) and learn_pe
                 blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe,
                                                        use_slopes=use_slopes)
+                if not pretrained:
+                    blocks[l].token_mixer.random_init()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)

@@ -75,7 +75,7 @@ class MetaFormerClassifier(ClassifierBase):
 
 
 class FlexFormerClassifier(ClassifierBase):
-    def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=3,
+    def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=5,
                  head_dim: int = 32, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1, use_slopes: bool = False,
                  rw_percentage: float = 0.4, learn_pe: bool = False):
         super().__init__(dataset_name, lr=lr)
