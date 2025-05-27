@@ -629,8 +629,11 @@ if has_mmseg and has_mmdet:
                 **kwargs)
 
 if __name__ == '__main__':
-    from torchinfo import summary
-    m = poolformer_s12(pretrained=True)
-    m.head = nn.Linear(512, 10)
-    print(m)
-    summary(m, input_size=(2, 3, 128, 128))
+    # from torchinfo import summary
+    # m = poolformer_s12(pretrained=True)
+    # m.head = nn.Linear(512, 10)
+    # print(m)
+    # summary(m, input_size=(2, 3, 128, 128))
+    url = model_urls['poolformer_s12']
+    checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True)
+    pass
