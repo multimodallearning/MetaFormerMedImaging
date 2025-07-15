@@ -23,6 +23,7 @@ class FlexTokenMixer(nn.Module):
         :param num_heads: number of heads used in attention
         :param block_mask: precomputed block mask for local attention
         :param learn_pos_emb: if True, a two-layer MLP on normalized coordinates as learnable position embedding is used
+        :param use_slopes: whether to use slopes as relative positional encoding in local attention
         :param eps: std of the normal distribution used to initialize weights
         """
         super().__init__()
@@ -42,8 +43,7 @@ class FlexTokenMixer(nn.Module):
             self.register_buffer('pos_emb', pos_emb)
             self.pos_emb_proj = nn.Sequential(nn.Linear(2, 16), nn.LeakyReLU(), nn.Linear(16, num_channel))
             self.pos_emb_proj.apply(lambda m: self.near_zero_init(m, eps))
-        self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16,
-                               'num_stages': 2}  # todo would be nice to have this optimzed
+        self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16}  # todo would be nice to have this optimzed
 
         self.in_proj_qk_weights = nn.Parameter(torch.randn(2 * num_channel, num_channel) * eps)
         self.in_proj_qk_bias = nn.Parameter(torch.zeros(2 * num_channel))

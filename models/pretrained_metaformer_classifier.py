@@ -11,23 +11,13 @@ from models.classifier_base import ClassifierBase
 
 
 class PretrainedMetaformer(ClassifierBase):
-    def __init__(self, ds_name, tokenmixer: str, patch_size: int=224, kernel_size: int = 3,
-                 head_dim: int = 32, model_name: str = "poolformer_s12", last_stage_pretrained: int = 2,
-                 learn_pe: bool = True, use_slopes: bool = False, drop_path: float = 0.1, device: str = "cuda"):
+    def __init__(self, ds_name, tokenmixer: str, patch_size: int=224, kernel_size: int = 5,
+                 head_dim: int = 16, model_name: str = "poolformer_s12", last_stage_pretrained: int = 2,
+                 learn_pe: bool = False, use_slopes: bool = False, drop_path: float = 0.1, device: str = "cuda"):
         super().__init__(ds_name)
         self.save_hyperparameters()
-        if use_slopes and head_dim != 16:
-            raise ValueError(f"head_dim has to be 16 for slopes, but is {head_dim}")
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=False)
-        if self.model.head.out_features != self.n_classes:
-            print('Replacing classifier head for new numbers of classes.')
-            self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
-        if self.n_channels != 3:
-            print('Reusing first conv weights and adapt to new number of input channel')
-            self.model.patch_embed.proj.weight = nn.Parameter(
-                adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
-            self.model.patch_embed.proj.in_channels = self.n_channels
 
         # load pretrained weights for first stages
         url = model_urls['poolformer_s12']
@@ -38,6 +28,7 @@ class PretrainedMetaformer(ClassifierBase):
         for key in checkpoint.keys():
             if key.startswith('norm.') or key.startswith('head.'):
                 del truncated_checkpoint[key]  # remove norm and head weights
+
             elif key.startswith('network.'):  # remove weights of stages that should not be pretrained
                 stage_id = int(key.split('.')[1])
                 if stage_id > highest_allowed_stage:
@@ -49,6 +40,16 @@ class PretrainedMetaformer(ClassifierBase):
                     name.startswith('network.') and int(name.split('.')[1]) <= highest_allowed_stage):
                 param.requires_grad = False
                 print(f'Freezing {name}.')
+
+        # adjust model to current dataset
+        if self.model.head.out_features != self.n_classes:
+            print('Replacing classifier head for new numbers of classes.')
+            self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
+        if self.n_channels != 3:
+            print('Reusing first conv weights and adapt to new number of input channel')
+            self.model.patch_embed.proj.weight = nn.Parameter(
+                adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
+            self.model.patch_embed.proj.in_channels = self.n_channels
 
         patch_size = torch.tensor([patch_size]*2)
         embed_dim = self.model.patch_embed.proj.out_channels
@@ -93,9 +94,10 @@ class PretrainedMetaformer(ClassifierBase):
                 for l in range(len(blocks)):
                     num_channel = blocks[l].norm1.num_channels
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
-                                                      stride=1, padding=kernel_size // 2, groups=num_channel)
+                                                      stride=1, padding=kernel_size // 2, groups=1)#num_channel)
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
+        #self.model = torch.compile(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
