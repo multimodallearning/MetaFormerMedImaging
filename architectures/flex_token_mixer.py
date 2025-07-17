@@ -1,19 +1,18 @@
 from typing import List, Any
-import math
 
+import math
 import torch
+from timm.models import adapt_input_conv
 from torch import nn
-from torch.ao.nn.quantized.functional import upsample
 from torch.nn import functional as F, init
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
 from architectures import poolformer as pf
 from architectures import score_mode_functions
-from timm.models import adapt_input_conv
-
 from models.classifier_base import ClassifierBase
 
 flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
+
 
 class FlexTokenMixer(nn.Module):
     def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = False,
@@ -70,12 +69,14 @@ class FlexTokenMixer(nn.Module):
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             init.uniform_(bias, -bound, bound)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        H, W = x.shape[-2:]
+    def forward(self, x: torch.Tensor, cls: torch.Tensor = None) -> torch.Tensor:
+        B, C, H, W = x.shape
         x_ = x.flatten(start_dim=2).transpose(1, 2)  # (B, C, H, W) -> (B, N, C)
         if self.learn_pos_emb:
             pos_emb_projected = self.pos_emb_proj(self.pos_emb)
             x_ = x_ + pos_emb_projected
+        if cls is not None:  # concat class token
+            x_ = torch.cat([cls.unsqueeze(1), x_], dim=1)  # (B, N+1, C)
         q, k = F.linear(x_, self.in_proj_qk_weights, self.in_proj_qk_bias).chunk(2, dim=-1)
         v = F.linear(x_, self.in_proj_v_weights, self.in_proj_v_bias)
 
@@ -83,12 +84,16 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask,)
-                                     #score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask, )
+        # score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_proj_weights, self.out_proj_bias)
+        if cls is not None:
+            cls = y_[:, 0, :]
+            y_ = y_[:, 1:, :]  # remove class token
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
-        return y - x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
+        y -= x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
+        return y if cls is None else (y, cls)
 
     @staticmethod
     def view4heads(x: torch.Tensor, num_heads: int) -> torch.Tensor:
@@ -97,8 +102,11 @@ class FlexTokenMixer(nn.Module):
 
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
-                 model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False, use_slopes: bool = False,
-                 rpl_patch_emb:bool=False, drop_path: float = 0.1, rw_percentage: float = None, device: str = "cuda"):
+                 model_name: str = "poolformer_s12", pretrained: bool = True, use_cls_toke: bool = False,
+                 learn_pe: bool = False,
+                 use_slopes: bool = False, rpl_patch_emb: bool = False, drop_path: float = 0.1,
+                 rw_percentage: float = None,
+                 device: str = "cuda"):
         """
         Replace AvgPool in PoolFormer with local self-attention.
         :param n_classes: number of classes for classification head
@@ -108,6 +116,7 @@ class FlexFormer(nn.Module):
         :param head_dim: number of dimensions per head
         :param model_name: poolformer model name to use
         :param pretrained: rather to use pretrained weights of poolformer or not
+        :param use_cls_toke: whether to use global class token
         :param learn_pe: use learnable position embedding in all attention blocks
         :param use_slopes: use slopes in directed local attention
         :param rpl_patch_emb: whether to replace conv with avg_pool patch embedding (i.e. no learnable projection)
@@ -120,6 +129,19 @@ class FlexFormer(nn.Module):
             raise ValueError(f"head_dim has to be 16 for slopes, but is {head_dim}")
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
+        self.use_cls_toke = use_cls_toke
+        if use_cls_toke:
+            n_channels = self.model.patch_embed.proj.out_channels  # dim of first stage
+            self.cls = nn.Parameter(torch.randn(n_channels))
+            proj_to_stage = []
+            for i, block in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
+                new_n_channels = block[0].norm1.num_channels
+                proj_to_stage.append(nn.Linear(n_channels, new_n_channels))
+                n_channels = new_n_channels  # prepare for next stage
+            proj_to_stage.pop(0)  # remove first stage projection, since cls was initialized with first stage dim
+            proj_to_stage.append(nn.Identity())  # helps for the for loop in forward ;)
+            self.proj_to_stage = nn.ModuleList(proj_to_stage)
+
         if self.model.head.out_features != n_classes:
             print('Replacing classifier head for new numbers of classes.')
             self.model.head = nn.Linear(self.model.head.in_features, n_classes)
@@ -145,7 +167,8 @@ class FlexFormer(nn.Module):
             stage_embed_dim = embed_dim * 2 ** i if embed_dim * 2 ** i != 256 else 320  # handle outlier of stage 3
             num_heads = stage_embed_dim // head_dim
             if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
-                block_mask = self.generate_block_mask(num_heads, kernel_size, stage_patch_size, device)
+                block_mask = self.generate_block_mask(num_heads, kernel_size, stage_patch_size, device,
+                                                      self.use_cls_toke)
 
             else:
                 # print(f'Skipping stage {i}')
@@ -175,11 +198,48 @@ class FlexFormer(nn.Module):
                 )
                 m.norm = nn.Identity()
 
+    @staticmethod
+    def forward_poolformerblock_with_cls(b: pf.PoolFormerBlock, x: torch.Tensor, cls: torch.Tensor) -> (
+    torch.Tensor, torch.Tensor):
+        # adaption of PoolFormerBlock.forward() to use class token
+        z, cls = b.token_mixer(b.norm1(x), cls)
+        if b.use_layer_scale:
+            x = x + b.drop_path(
+                b.layer_scale_1.unsqueeze(-1).unsqueeze(-1) * z)
+            x = x + b.drop_path(
+                b.layer_scale_2.unsqueeze(-1).unsqueeze(-1)
+                * b.mlp(b.norm2(x)))
+        else:
+            x = x + b.drop_path(z)
+            x = x + b.drop_path(b.mlp(b.norm2(x)))
+        return x, cls
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+        if self.use_cls_toke:  # add class token
+            # input embedding
+            x = self.model.forward_embeddings(x)
+            cls = self.cls.unsqueeze(0).expand(x.shape[0], -1)  # (B, C)
+            stage_idx = 0
+            for m in self.model.network:
+                if isinstance(m, pf.PatchEmbed):
+                    x = m(x)
+                elif isinstance(m, nn.Sequential):
+                    for block in m:
+                        x, cls = self.forward_poolformerblock_with_cls(block, x, cls)
+                    cls = self.proj_to_stage[stage_idx](cls)  # project cls token to the next stage dimension
+                    stage_idx += 1
+                else:
+                    raise AssertionError('Unknown module type in PoolFormer network: ' + str(type(m)))
+            y_hat = self.model.head(cls)
+
+        else:  # default forward without class token
+            y_hat = self.model(x)
+
+        return y_hat
 
     @staticmethod
-    def generate_block_mask(num_heads: int, kernel: int, patch_size: torch.Tensor, device: str) -> Any:
+    def generate_block_mask(num_heads: int, kernel: int, patch_size: torch.Tensor, device: str,
+                            has_cls: bool = False) -> Any:
         kernel = torch.tensor([kernel, kernel], device=device)
         patch_size = patch_size.int().to(device)
 
@@ -196,8 +256,27 @@ class FlexFormer(nn.Module):
             is_valid = is_valid_x & is_valid_y
             return is_valid
 
+        def compute_mask_with_cls(b, h, q_idx, kv_idx):
+            # unravel index with correction for global cls token at index 0
+            q_x = (q_idx - 1) % patch_size[1]
+            q_y = (q_idx - 1) // patch_size[1]
+            kv_x = (kv_idx - 1) % patch_size[1]
+            kv_y = (kv_idx - 1) // patch_size[1]
+
+            # compute mask
+            is_valid_x = (q_x - kv_x).abs() <= kernel[0] // 2
+            is_valid_y = (q_y - kv_y).abs() <= kernel[1] // 2
+            is_valid = is_valid_x & is_valid_y
+
+            # allow connection to global cls token
+            is_valid = is_valid | (kv_idx == 0) | (q_idx == 0)
+            return is_valid
+
         S = patch_size.prod().item()
-        block_mask = create_block_mask(compute_mask, None, num_heads, S, S, device, _compile=True)
+        if has_cls:
+            block_mask = create_block_mask(compute_mask_with_cls, None, num_heads, S + 1, S + 1, device, _compile=True)
+        else:
+            block_mask = create_block_mask(compute_mask, None, num_heads, S, S, device, _compile=True)
         return block_mask
 
 
@@ -215,7 +294,7 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [224, 224], 7, 32, rpl_patch_emb=True).cuda()
+    f = FlexFormer(10, 3, [224, 224], 7, 32, use_cls_toke=True).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
     # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
