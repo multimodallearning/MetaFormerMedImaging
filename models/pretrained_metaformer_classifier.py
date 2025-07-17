@@ -23,23 +23,26 @@ class PretrainedMetaformer(ClassifierBase):
         url = model_urls['poolformer_s12']
         checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True)
         truncated_checkpoint = checkpoint.copy()
-        highest_allowed_stage = (last_stage_pretrained - 1) * 2  # start counting at 1
-        assert highest_allowed_stage >= 0
-        for key in checkpoint.keys():
-            if key.startswith('norm.') or key.startswith('head.'):
-                del truncated_checkpoint[key]  # remove norm and head weights
+        assert 0 <= last_stage_pretrained <= 4, f"last_stage_pretrained must be between 0 and 4, but is {last_stage_pretrained}."
+        if last_stage_pretrained > 0:
+            highest_allowed_stage = (last_stage_pretrained - 1) * 2  # start counting at 1
+            for key in checkpoint.keys():
+                if key.startswith('norm.') or key.startswith('head.'):
+                    del truncated_checkpoint[key]  # remove norm and head weights
 
-            elif key.startswith('network.'):  # remove weights of stages that should not be pretrained
-                stage_id = int(key.split('.')[1])
-                if stage_id > highest_allowed_stage:
-                    del truncated_checkpoint[key]
-        self.model.load_state_dict(truncated_checkpoint, strict=False)
-        # freeze pretrained weights
-        for name, param in self.model.named_parameters():
-            if name.startswith('patch_embed.') or (
-                    name.startswith('network.') and int(name.split('.')[1]) <= highest_allowed_stage):
-                param.requires_grad = False
-                print(f'Freezing {name}.')
+                elif key.startswith('network.'):  # remove weights of stages that should not be pretrained
+                    stage_id = int(key.split('.')[1])
+                    if stage_id > highest_allowed_stage:
+                        del truncated_checkpoint[key]
+            self.model.load_state_dict(truncated_checkpoint, strict=False)
+            # freeze pretrained weights
+            for name, param in self.model.named_parameters():
+                if name.startswith('patch_embed.') or (
+                        name.startswith('network.') and int(name.split('.')[1]) <= highest_allowed_stage):
+                    param.requires_grad = False
+                    print(f'Freezing {name}.')
+        else:
+            print('Not loading any pretrained weights, training from scratch.')
 
         # adjust model to current dataset
         if self.model.head.out_features != self.n_classes:
@@ -104,14 +107,16 @@ class PretrainedMetaformer(ClassifierBase):
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
-            Task.current_task().set_name(f'hybridformer_{self.hparams.tokenmixer}_{self.hparams.ds_name}')
+            Task.current_task().set_name(f'hybridformer_{self.hparams.tokenmixer}_stage{self.hparams.last_stage_pretrained}_{self.hparams.ds_name}')
 
 
 if __name__ == '__main__':
-    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv']:
-        print(f'Testing {mixer_name}...')
-        m = PretrainedMetaformer('imagewoof', mixer_name, 224, 5, 16).cuda()
-        print(m)
-        x = torch.randn(2, 3, 224, 224).cuda()
-        y = m(x)
-        print(f'Output shape: {y.shape}\n')
+    for mixer_name in ['loc_attn']:#, 'full_attn', 'pooling', 'conv']:
+        for stages_pretrained in range(0, 5):
+            print(f'Testing {mixer_name} with {stages_pretrained} stages pretrained.')
+            m = PretrainedMetaformer('imagewoof', mixer_name, 224, 5, 16,
+                                     last_stage_pretrained=stages_pretrained).cuda()
+            #print(m)
+            x = torch.randn(2, 3, 224, 224).cuda()
+            y = m(x)
+            print(f'Output shape: {y.shape}\n')
