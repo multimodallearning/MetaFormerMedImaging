@@ -3,6 +3,7 @@ import math
 
 import torch
 from torch import nn
+from torch.ao.nn.quantized.functional import upsample
 from torch.nn import functional as F, init
 from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 
@@ -97,7 +98,7 @@ class FlexTokenMixer(nn.Module):
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
                  model_name: str = "poolformer_s12", pretrained: bool = True, learn_pe: bool = False, use_slopes: bool = False,
-                 drop_path: float = 0.1, rw_percentage: float = 0.4, device: str = "cuda"):
+                 rpl_patch_emb:bool=False, drop_path: float = 0.1, rw_percentage: float = None, device: str = "cuda"):
         """
         Replace AvgPool in PoolFormer with local self-attention.
         :param n_classes: number of classes for classification head
@@ -109,8 +110,9 @@ class FlexFormer(nn.Module):
         :param pretrained: rather to use pretrained weights of poolformer or not
         :param learn_pe: use learnable position embedding in all attention blocks
         :param use_slopes: use slopes in directed local attention
+        :param rpl_patch_emb: whether to replace conv with avg_pool patch embedding (i.e. no learnable projection)
         :param drop_path: stochastic depth rate
-        :param rw_percentage: percentage of weights to reset
+        :param rw_percentage: percentage of weights to reset (between 0 and 1). If None, no weights are reset.
         :param device: device to use for computation. Has to be given due to block mask generation and compilation
         """
         super().__init__()
@@ -157,6 +159,22 @@ class FlexFormer(nn.Module):
                 if not pretrained:
                     blocks[l].token_mixer.random_init()
 
+        if rpl_patch_emb:
+            upsample_kwargs = {'mode': 'bilinear', 'align_corners': False}
+
+            old_conv = self.model.patch_embed.proj
+            self.model.patch_embed.proj = nn.Sequential(
+                nn.Upsample(scale_factor=0.25, **upsample_kwargs),
+                nn.Conv2d(old_conv.in_channels, old_conv.out_channels, kernel_size=1, bias=False)
+            )
+
+            for m in filter(lambda m: isinstance(m, pf.PatchEmbed), self.model.network.modules()):
+                m.proj = nn.Sequential(
+                    nn.Upsample(scale_factor=0.5, **upsample_kwargs),
+                    nn.Conv2d(m.proj.in_channels, m.proj.out_channels, kernel_size=1, bias=False)
+                )
+                m.norm = nn.Identity()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
@@ -197,7 +215,7 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [224, 224], 7, 32).cuda()
+    f = FlexFormer(10, 3, [224, 224], 7, 32, rpl_patch_emb=True).cuda()
     print(f)
     print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
     # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
