@@ -36,11 +36,11 @@ class PretrainedMetaformer(ClassifierBase):
                         del truncated_checkpoint[key]
             self.model.load_state_dict(truncated_checkpoint, strict=False)
             # freeze pretrained weights
-            for name, param in self.model.named_parameters():
-                if name.startswith('patch_embed.') or (
-                        name.startswith('network.') and int(name.split('.')[1]) <= highest_allowed_stage):
-                    param.requires_grad = False
-                    print(f'Freezing {name}.')
+            # for name, param in self.model.named_parameters():
+            #     if name.startswith('patch_embed.') or (
+            #             name.startswith('network.') and int(name.split('.')[1]) <= highest_allowed_stage):
+            #         param.requires_grad = False
+            #         print(f'Freezing {name}.')
         else:
             print('Not loading any pretrained weights, training from scratch.')
 
