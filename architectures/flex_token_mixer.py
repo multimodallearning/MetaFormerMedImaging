@@ -129,15 +129,21 @@ class FlexFormer(nn.Module):
             raise ValueError(f"head_dim has to be 16 for slopes, but is {head_dim}")
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
+        # handle CLS token
         self.use_cls_toke = use_cls_toke
         if use_cls_toke:
             n_channels = self.model.patch_embed.proj.out_channels  # dim of first stage
             self.cls = nn.Parameter(torch.randn(n_channels))
             proj_to_stage = []
-            for i, block in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
-                new_n_channels = block[0].norm1.num_channels
+            for i, seq in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
+                new_n_channels = seq[0].norm1.num_channels
                 proj_to_stage.append(nn.Linear(n_channels, new_n_channels))
                 n_channels = new_n_channels  # prepare for next stage
+
+                # add batch norm to each block
+                for block in seq:
+                    block.cls_norm = nn.BatchNorm1d(new_n_channels)
+
             proj_to_stage.pop(0)  # remove first stage projection, since cls was initialized with first stage dim
             proj_to_stage.append(nn.Identity())  # helps for the for loop in forward ;)
             self.proj_to_stage = nn.ModuleList(proj_to_stage)
@@ -212,6 +218,8 @@ class FlexFormer(nn.Module):
         else:
             x = x + b.drop_path(z)
             x = x + b.drop_path(b.mlp(b.norm2(x)))
+        cls = b.cls_norm(cls)
+        cls = b.mlp(cls.unsqueeze(-1).unsqueeze(-1)).squeeze(-1).squeeze(-1)
         return x, cls
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
