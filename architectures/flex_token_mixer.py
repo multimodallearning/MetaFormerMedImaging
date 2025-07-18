@@ -218,6 +218,7 @@ class FlexFormer(nn.Module):
         else:
             x = x + b.drop_path(z)
             x = x + b.drop_path(b.mlp(b.norm2(x)))
+        # use channel MLP and individual batch norm for cls token. Linear CLS if not used
         cls = b.cls_norm(cls)
         cls = b.mlp(cls.unsqueeze(-1).unsqueeze(-1)).squeeze(-1).squeeze(-1)
         return x, cls
@@ -238,7 +239,12 @@ class FlexFormer(nn.Module):
                     stage_idx += 1
                 else:
                     raise AssertionError('Unknown module type in PoolFormer network: ' + str(type(m)))
-            y_hat = self.model.head(cls)
+            # use CLS token for classification
+            #y_hat = self.model.head(cls)
+
+            # default classification
+            x = self.model.norm(x)
+            y_hat = self.model.head(x.mean(dim=[-2, -1]))  # global average pooling
 
         else:  # default forward without class token
             y_hat = self.model(x)
