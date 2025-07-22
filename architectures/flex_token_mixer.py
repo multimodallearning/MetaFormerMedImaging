@@ -103,10 +103,8 @@ class FlexTokenMixer(nn.Module):
 class FlexFormer(nn.Module):
     def __init__(self, n_classes: int, n_input_channel: int, patch_size: List[int], kernel_size: int, head_dim: int,
                  model_name: str = "poolformer_s12", pretrained: bool = True, use_cls_toke: bool = False,
-                 learn_pe: bool = False,
-                 use_slopes: bool = False, rpl_patch_emb: bool = False, drop_path: float = 0.1,
-                 rw_percentage: float = None,
-                 device: str = "cuda"):
+                 learn_pe: bool = False, use_slopes: bool = False, rpl_patch_emb: bool = False, drop_path: float = 0.1,
+                 rw_percentage: float = None, device: str = "cuda"):
         """
         Replace AvgPool in PoolFormer with local self-attention.
         :param n_classes: number of classes for classification head
@@ -308,8 +306,15 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [224, 224], 7, 32, use_cls_toke=True).cuda()
+    f = FlexFormer(10, 3, [384, 224], 5, 16).cuda()
     print(f)
-    print(f(torch.randn(128, 3, 224, 224).cuda()).shape)
+    print(f(torch.randn(128, 3, 384, 224).cuda()).shape)
+    f.model.fork_feat = True
+    f.model.out_indices = [0, 2, 4, 6]
+    for i in f.model.out_indices:
+        f.model.add_module(f'norm{i}', nn.Identity())
+    seg_hat = f(torch.randn(128, 3, 384, 224).cuda())
+    for i, feat in enumerate(seg_hat):
+        print(i, feat.shape)
     # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
     # pass
