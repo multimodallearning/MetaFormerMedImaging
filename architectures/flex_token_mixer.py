@@ -27,6 +27,7 @@ class FlexTokenMixer(nn.Module):
         :param eps: std of the normal distribution used to initialize weights
         """
         super().__init__()
+        assert not use_slopes, "Adjust implementation for this. See forward call of flex_attention_compiled."
         self.num_heads = num_heads
         self.block_mask = block_mask
         if block_mask is not None:

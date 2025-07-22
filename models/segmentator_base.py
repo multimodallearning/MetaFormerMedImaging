@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class SegmentatorBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01,
-                 warmup_epochs: int = 5, min_lr: float = 1e-5, loss_weight_max: float = 10):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
         if ds_name.lower() == 'wristbone':
@@ -26,17 +26,15 @@ class SegmentatorBase(LightningModule):
             self.n_classes = SegGrazPedWriDataset.N_CLASSES
             self.label = SegGrazPedWriDataset.BONE_LABEL
             task = "multi-label"
-            loss_weights = SegGrazPedWriDataset.POS_CLASS_WEIGHT
         else:
             raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
         # criterion
-        loss_weights = loss_weights.view(-1, 1, 1).clamp(max=loss_weight_max)
         if task.split(',')[0] == 'multi-label':
-            self.criterion = nn.BCEWithLogitsLoss(pos_weight=loss_weights)
+            self.criterion = nn.BCEWithLogitsLoss()
             self.cls_mtl_exclude = False
         elif task in ['multi-class', 'binary-class']:
-            self.criterion = nn.CrossEntropyLoss(weight=loss_weights)
+            self.criterion = nn.CrossEntropyLoss()
             self.cls_mtl_exclude = True
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
@@ -52,8 +50,7 @@ class SegmentatorBase(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr,
-                                  loss_weight_clamp_max=loss_weight_max)
+        self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
         if Task.current_task() is not None:
             Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
