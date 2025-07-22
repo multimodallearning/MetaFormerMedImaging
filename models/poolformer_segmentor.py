@@ -11,7 +11,7 @@ from torch import nn
 from torch.nn import functional as F
 
 class MetaFormerSegmentator(SegmentatorBase):
-    def __init__(self, ds_name: str, token_mixer:str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size: int = 5,
+    def __init__(self, ds_name: str, token_mixer:str, model_name: str = 'poolformer_s12', pretrained: bool = False, kernel_size: int = 5,
                  head_dim: int = 16, lr: float = 1e-3, drop_path: float = 0.1, use_slopes: bool = False,
                  learn_pe: bool = False, rpl_patch_emb: bool = False, decoder_latent_dim:int=256):
         super().__init__(ds_name, lr=lr)
@@ -34,7 +34,7 @@ class MetaFormerSegmentator(SegmentatorBase):
         self.seg_head = nn.Conv2d(decoder_latent_dim, self.n_classes, kernel_size=1, bias=True)
 
         try:
-            patch_size = {'wristbone': [384, 224]}[ds_name.lower()]
+            patch_size = {'wristbone': [384, 224], 'jsrt': [256, 256]}[ds_name.lower()]
         except KeyError:
             raise NotImplementedError(f'Dataset {ds_name} has not been added yet.')
 

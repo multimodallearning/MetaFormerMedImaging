@@ -5,13 +5,14 @@ from typing import Optional, Any
 
 import torch
 from clearml import Logger, Task
+from monai.losses import DiceCELoss
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import LRSchedulerTypeUnion
 from timm.scheduler import CosineLRScheduler
-from torch import nn
 from torchmetrics import classification, MetricCollection, MeanMetric
 
 from datasets.grazpedwri_dataset import SegGrazPedWriDataset
+from datasets.jsrt_dataset import JSRTDataset
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -26,19 +27,23 @@ class SegmentatorBase(LightningModule):
             self.n_classes = SegGrazPedWriDataset.N_CLASSES
             self.label = SegGrazPedWriDataset.BONE_LABEL
             task = "multi-label"
+        elif ds_name.lower() == 'jsrt':
+            self.n_channels = 1
+            self.n_classes = JSRTDataset.N_CLASSES
+            self.label = JSRTDataset.LABELS
+            task = "multi-label"
         else:
             raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
         # criterion
         if task.split(',')[0] == 'multi-label':
-            self.criterion = nn.BCEWithLogitsLoss()
             self.cls_mtl_exclude = False
         elif task in ['multi-class', 'binary-class']:
-            self.criterion = nn.CrossEntropyLoss()
             self.cls_mtl_exclude = True
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
         print('Classes are mutual exclusive:', self.cls_mtl_exclude)
+        self.criterion = DiceCELoss(softmax=self.cls_mtl_exclude, sigmoid=not self.cls_mtl_exclude)
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
@@ -76,10 +81,6 @@ class SegmentatorBase(LightningModule):
     def common_step(self, batch, mode):
         x, y = batch
         y_hat = self.forward(x)
-        if self.cls_mtl_exclude:
-            y = y.squeeze(-1)  # handle case of (B, 1) of binary classification (rewritten as multi-class)
-        else:  # multi-label, where y holds probabilities
-            y = y.float()
         loss = self.criterion(y_hat, y)
 
         with torch.no_grad():

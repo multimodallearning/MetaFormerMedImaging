@@ -8,13 +8,15 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
 from datasets.grazpedwri_dataset import SegGrazPedWriDataModule
+from datasets.jsrt_dataset import JSRTDataModule
 from models.poolformer_segmentor import MetaFormerSegmentator
+from models.unet import UNetSegmentator
 
 task = Task.init(project_name="FlexConv/Segmentation", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)
 
 # training routine
-cli = LightningCLI(model_class=MetaFormerSegmentator, datamodule_class=SegGrazPedWriDataModule)
+cli = LightningCLI()
 
 # housekeeping
 trainer = cli.trainer
