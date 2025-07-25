@@ -27,16 +27,13 @@ class FlexTokenMixer(nn.Module):
         :param eps: std of the normal distribution used to initialize weights
         """
         super().__init__()
-        assert not use_slopes, "Adjust implementation for this. See forward call of flex_attention_compiled."
         self.num_heads = num_heads
         self.block_mask = block_mask
         if block_mask is not None:
             L = block_mask.shape[-1]
             patch_size = int(L ** 0.5)
-        if use_slopes and block_mask is not None:
-            self.score_mod_fn = getattr(score_mode_functions, f'wrapper_s4_{patch_size}')
-        else:
-            self.score_mod_fn = None
+        use_slopes = use_slopes and (block_mask is not None)
+        self.score_mod_fn = getattr(score_mode_functions, f'wrapper_s4_{patch_size}') if use_slopes else None
         self.learn_pos_emb = learn_pos_emb and (block_mask is not None)
         if self.learn_pos_emb:
             pos_emb = torch.meshgrid([torch.linspace(-1, 1, patch_size)] * 2, indexing='ij')
@@ -85,8 +82,8 @@ class FlexTokenMixer(nn.Module):
         k_ = self.view4heads(k, self.num_heads)
         v_ = self.view4heads(v, self.num_heads)
 
-        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask, )
-        # score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
+        y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask, #)
+        score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
         y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
         y_ = F.linear(y_, self.out_proj_weights, self.out_proj_bias)
         if cls is not None:
