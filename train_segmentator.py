@@ -10,7 +10,7 @@ from pytorch_lightning.cli import LightningCLI
 from datasets.grazpedwri_dataset import SegGrazPedWriDataModule
 from datasets.jsrt_dataset import JSRTDataModule
 from models.poolformer_segmentor import MetaFormerSegmentator
-from models.unet import UNetSegmentator
+from models.unet import UNetSegmentator, UNetOnPatchEmbedding
 
 task = Task.init(project_name="FlexConv/Segmentation", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)
