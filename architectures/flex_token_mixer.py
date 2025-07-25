@@ -43,12 +43,11 @@ class FlexTokenMixer(nn.Module):
             self.pos_emb_proj.apply(lambda m: self.near_zero_init(m, eps))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16}  # todo would be nice to have this optimzed
 
-        self.in_proj_qk_weights = nn.Parameter(torch.randn(2 * num_channel, num_channel) * eps)
-        self.in_proj_qk_bias = nn.Parameter(torch.zeros(2 * num_channel))
-        self.in_proj_v_weights = nn.Parameter(torch.eye(num_channel))
-        self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
+        self.in_proj_qkv_weights = nn.Parameter(torch.randn(2 * num_channel, num_channel) * eps)
+        self.in_proj_qkv_bias = nn.Parameter(torch.zeros(2 * num_channel))
         self.out_proj_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
+        self.random_init()
 
     @staticmethod
     def near_zero_init(m: nn.Module, var: float):
@@ -58,7 +57,7 @@ class FlexTokenMixer(nn.Module):
 
     # adapted from nn.Linear.reset_parameters()
     def random_init(self) -> None:
-        for layer_name in ['in_proj_qk', 'in_proj_v', 'out_proj']:
+        for layer_name in ['in_proj_qkv', 'out_proj']:
             weights = getattr(self, f'{layer_name}_weights')
             init.kaiming_uniform_(weights, a=math.sqrt(5))
 
@@ -75,8 +74,7 @@ class FlexTokenMixer(nn.Module):
             x_ = x_ + pos_emb_projected
         if cls is not None:  # concat class token
             x_ = torch.cat([cls.unsqueeze(1), x_], dim=1)  # (B, N+1, C)
-        q, k = F.linear(x_, self.in_proj_qk_weights, self.in_proj_qk_bias).chunk(2, dim=-1)
-        v = F.linear(x_, self.in_proj_v_weights, self.in_proj_v_bias)
+        q, k, v = F.linear(x_, self.in_proj_qkv_weights, self.in_proj_qkv_bias).chunk(3, dim=-1)
 
         q_ = self.view4heads(q, self.num_heads)
         k_ = self.view4heads(k, self.num_heads)
