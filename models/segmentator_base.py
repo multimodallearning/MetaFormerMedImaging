@@ -13,6 +13,7 @@ from torchmetrics import classification, MetricCollection, MeanMetric
 
 from datasets.grazpedwri_dataset import SegGrazPedWriDataset
 from datasets.jsrt_dataset import JSRTDataset
+from datasets import tiger_dataset
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -32,6 +33,11 @@ class SegmentatorBase(LightningModule):
             self.n_classes = JSRTDataset.N_CLASSES
             self.label = JSRTDataset.LABELS
             task = "multi-label"
+        elif ds_name.lower() == 'tiger':
+            self.n_channels = 3
+            self.n_classes = tiger_dataset.N_CLASSES
+            self.label = tiger_dataset.LABELS
+            task = "multi-class"
         else:
             raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
@@ -43,7 +49,8 @@ class SegmentatorBase(LightningModule):
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
         print('Classes are mutual exclusive:', self.cls_mtl_exclude)
-        self.criterion = DiceCELoss(softmax=self.cls_mtl_exclude, sigmoid=not self.cls_mtl_exclude)
+        self.criterion = DiceCELoss(softmax=self.cls_mtl_exclude, sigmoid=not self.cls_mtl_exclude,
+                                    to_onehot_y=self.cls_mtl_exclude)
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
@@ -88,7 +95,7 @@ class SegmentatorBase(LightningModule):
             getattr(self, f"{mode}_loss")(loss)
             metrics = getattr(self, f"{mode}_metrics")
             if self.cls_mtl_exclude:
-                metrics(y_hat.argmax(1), y.long())
+                metrics(y_hat.argmax(1, keepdim=True), y.long())
             else:
                 metrics(y_hat.sigmoid(), y.long())
 
