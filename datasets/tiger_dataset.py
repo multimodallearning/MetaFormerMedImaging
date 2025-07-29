@@ -9,6 +9,8 @@ from pytorch_lightning.core.datamodule import LightningDataModule
 LABELS = ['invasive_tumor', 'tumor_associated_stroma', 'in_situ_tumor', 'healthy_glands', 'necrosis_not_in_situ',
           'inflamed_stroma', 'rest']
 N_CLASSES = len(LABELS) + 1 # because of background
+LBL_CNT = torch.tensor([216838887, 310752344, 316315696,  35467227,   7607082,  48601048, 92258250,  92876335]) # include background
+
 
 class TIGERDataModule(LightningDataModule):
     def __init__(self, batch_size: int = 32, spatial_size: int = 256, n_patches: int = 4):
@@ -49,11 +51,18 @@ class TIGERDataModule(LightningDataModule):
         ]))
 
         if stage == 'fit':
+            # calculate class weights
+            lbl_ratio = (1 / LBL_CNT) ** 0.5
+            lbl_ratio[0] = 0 # set probability for background to zero
+
+
             self.train_ds = data.CacheDataset(train_data, cache_rate=cache_rate, num_workers=None, transform=transforms.Compose([
                 *self.base_transform,
                 transforms.RandAxisFlipd(['image', 'label'], 0.5),
-                transforms.RandSpatialCropSamplesD(['image', 'label'], roi_size=self.spatial_size,
-                                                   num_samples=4, random_size=False, random_center=True),
+                transforms.RandCropByLabelClassesD(['image', 'label'], 'label', self.spatial_size,
+                                                   lbl_ratio, N_CLASSES, self.n_patches),
+                # transforms.RandSpatialCropSamplesD(['image', 'label'], roi_size=self.spatial_size,
+                #                                    num_samples=self.n_patches, random_size=False, random_center=True),
             ]))
 
     def train_dataloader(self):

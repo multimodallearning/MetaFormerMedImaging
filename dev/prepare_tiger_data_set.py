@@ -37,7 +37,7 @@ df_big_resolution.loc[train_idx.index, 'split'] = 'train'
 
 sum = torch.zeros(3)
 n_pxls = 0
-lbl_values = set()
+lbl_cnts = torch.zeros(8, dtype=torch.long)
 for idx, row in tqdm(df_big_resolution.iterrows(), total=len(df_big_resolution)):
     dst_img_dir = base / ('imagesTr' if row['split'] == 'train' else 'imagesTs')
     dst_lbl_dir = base / ('labelsTr' if row['split'] == 'train' else 'labelsTs')
@@ -51,10 +51,9 @@ for idx, row in tqdm(df_big_resolution.iterrows(), total=len(df_big_resolution))
     sum += img.sum(dim=1)
     n_pxls += img.shape[1]
 
-    lbl = decode_image(lbl_path).unique().tolist()
-    lbl_values.update(lbl)
-
-print('present labels', lbl_values)
+    lbl = decode_image(lbl_path).int()
+    lbl_cnts += torch.bincount(lbl.view(-1), minlength=len(lbl_cnts))
+print('label counts', lbl_cnts)
 
 mean = sum / n_pxls
 print('mean:', mean.tolist())
