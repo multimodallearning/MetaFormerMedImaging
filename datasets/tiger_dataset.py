@@ -6,9 +6,9 @@ from monai import data
 from monai import transforms
 from pytorch_lightning.core.datamodule import LightningDataModule
 
-LABELS = ['background', 'invasive_tumor', 'tumor_associated_stroma', 'in_situ_tumor', 'healthy_glands', 'necrosis_not_in_situ',
+LABELS = ['invasive_tumor', 'tumor_associated_stroma', 'in_situ_tumor', 'healthy_glands', 'necrosis_not_in_situ',
           'inflamed_stroma', 'rest']
-N_CLASSES = len(LABELS)
+N_CLASSES = len(LABELS) + 1 # because of background
 
 class TIGERDataModule(LightningDataModule):
     def __init__(self, batch_size: int = 32, spatial_size: int = 256, n_patches: int = 4):

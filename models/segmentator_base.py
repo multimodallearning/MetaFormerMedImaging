@@ -23,6 +23,7 @@ class SegmentatorBase(LightningModule):
                  warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
+        has_background = False
         if ds_name.lower() == 'wristbone':
             self.n_channels = 1
             self.n_classes = SegGrazPedWriDataset.N_CLASSES
@@ -38,6 +39,7 @@ class SegmentatorBase(LightningModule):
             self.n_classes = tiger_dataset.N_CLASSES
             self.label = tiger_dataset.LABELS
             task = "multi-class"
+            has_background = True
         else:
             raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
@@ -50,11 +52,12 @@ class SegmentatorBase(LightningModule):
             raise NotImplementedError(f"Task {task} is not implemented.")
         print('Classes are mutual exclusive:', self.cls_mtl_exclude)
         self.criterion = DiceCELoss(softmax=self.cls_mtl_exclude, sigmoid=not self.cls_mtl_exclude,
-                                    to_onehot_y=self.cls_mtl_exclude)
+                                    to_onehot_y=self.cls_mtl_exclude, include_background=not has_background)
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
-                          "task": 'multiclass' if self.cls_mtl_exclude else 'multilabel'}
+                          "task": 'multiclass' if self.cls_mtl_exclude else 'multilabel',
+                          "ignore_index": 0 if has_background else None}
         self.train_metrics = MetricCollection({
             "dsc": classification.F1Score(**metrics_kwargs),
         }, postfix='/train')
