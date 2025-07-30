@@ -23,7 +23,7 @@ class SegmentatorBase(LightningModule):
                  warmup_epochs: int = 5, min_lr: float = 1e-5):
         super().__init__()
         # attributes
-        has_background = False
+        self.has_background = False
         if ds_name.lower() == 'wristbone':
             self.n_channels = 1
             self.n_classes = SegGrazPedWriDataset.N_CLASSES
@@ -39,7 +39,7 @@ class SegmentatorBase(LightningModule):
             self.n_classes = tiger_dataset.N_CLASSES
             self.label = tiger_dataset.LABELS
             task = "multi-class"
-            has_background = True
+            self.has_background = True
         else:
             raise NotImplementedError(f'Dataset {ds_name} is not implemented.')
 
@@ -52,12 +52,12 @@ class SegmentatorBase(LightningModule):
             raise NotImplementedError(f"Task {task} is not implemented.")
         print('Classes are mutual exclusive:', self.cls_mtl_exclude)
         self.criterion = DiceCELoss(softmax=self.cls_mtl_exclude, sigmoid=not self.cls_mtl_exclude,
-                                    to_onehot_y=self.cls_mtl_exclude, include_background=not has_background)
+                                    to_onehot_y=self.cls_mtl_exclude, include_background=not self.has_background)
 
         # metrics
         metrics_kwargs = {"num_classes": self.n_classes, "num_labels": self.n_classes, "average": None,
                           "task": 'multiclass' if self.cls_mtl_exclude else 'multilabel',
-                          "ignore_index": 0 if has_background else None}
+                          "ignore_index": 0 if self.has_background else None}
         self.train_metrics = MetricCollection({
             "dsc": classification.F1Score(**metrics_kwargs),
         }, postfix='/train')
@@ -82,7 +82,6 @@ class SegmentatorBase(LightningModule):
         if Logger.current_logger() is not None:
             Logger.current_logger().report_scalar('learning rate', 'lr',
                                                   scheduler._get_lr(self.current_epoch)[0], self.current_epoch)
-
 
     @abstractmethod
     def forward(self, batch):
@@ -114,6 +113,9 @@ class SegmentatorBase(LightningModule):
 
         epoch_values = getattr(self, f"{mode}_metrics").compute()
         for name, value in epoch_values.items():
+            if self.has_background: # drop background for tracking
+                value = value[1:]
+
             # metric logging for pytorch lightning to enable selection of best model
             self.log(name, value.mean())
 

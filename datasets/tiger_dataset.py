@@ -59,10 +59,10 @@ class TIGERDataModule(LightningDataModule):
             self.train_ds = data.CacheDataset(train_data, cache_rate=cache_rate, num_workers=None, transform=transforms.Compose([
                 *self.base_transform,
                 transforms.RandAxisFlipd(['image', 'label'], 0.5),
-                transforms.RandCropByLabelClassesD(['image', 'label'], 'label', self.spatial_size,
-                                                   lbl_ratio, N_CLASSES, self.n_patches),
-                # transforms.RandSpatialCropSamplesD(['image', 'label'], roi_size=self.spatial_size,
-                #                                    num_samples=self.n_patches, random_size=False, random_center=True),
+                # transforms.RandCropByLabelClassesD(['image', 'label'], 'label', self.spatial_size,
+                #                                    lbl_ratio, N_CLASSES, self.n_patches),
+                transforms.RandSpatialCropSamplesD(['image', 'label'], roi_size=self.spatial_size,
+                                                   num_samples=self.n_patches, random_size=False, random_center=True),
             ]))
 
     def train_dataloader(self):
