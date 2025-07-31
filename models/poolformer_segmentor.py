@@ -13,7 +13,7 @@ from torch.nn import functional as F
 class MetaFormerSegmentator(SegmentatorBase):
     def __init__(self, ds_name: str, token_mixer:str, model_name: str = 'poolformer_s12', pretrained: bool = False, kernel_size: int = 5,
                  head_dim: int = 16, lr: float = 1e-3, drop_path: float = 0.1, use_slopes: bool = False,
-                 learn_pe: bool = False, rpl_patch_emb: bool = False, decoder_latent_dim:int=256):
+                 learn_pe: bool = False, decoder_latent_dim:int=256, patch_size:int=None):
         super().__init__(ds_name, lr=lr)
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.encoder = getattr(pf, model_name)(pretrained=pretrained)
@@ -33,10 +33,14 @@ class MetaFormerSegmentator(SegmentatorBase):
         self.decoder = SegformerDecoder(embed_dims, decoder_latent_dim)
         self.seg_head = nn.Conv2d(decoder_latent_dim, self.n_classes, kernel_size=1, bias=True)
 
-        try:
-            patch_size = {'wristbone': [384, 224], 'jsrt': [256, 256]}[ds_name.lower()]
-        except KeyError:
-            raise NotImplementedError(f'Dataset {ds_name} has not been added yet.')
+        if patch_size is None:
+            try:
+                patch_size = {'wristbone': [384, 224], 'jsrt': [256, 256], 'tiger': [256, 256]}[ds_name.lower()]
+            except KeyError:
+                raise NotImplementedError(f'Dataset {ds_name} has not been added yet.')
+        else:
+            assert isinstance(patch_size, int)
+            patch_size = [patch_size, patch_size]
 
         # replace token mixer
         patch_size = torch.tensor(patch_size)

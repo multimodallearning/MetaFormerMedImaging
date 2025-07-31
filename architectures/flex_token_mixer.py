@@ -43,8 +43,8 @@ class FlexTokenMixer(nn.Module):
             self.pos_emb_proj.apply(lambda m: self.near_zero_init(m, eps))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16}  # todo would be nice to have this optimzed
 
-        self.in_proj_qkv_weights = nn.Parameter(torch.randn(2 * num_channel, num_channel) * eps)
-        self.in_proj_qkv_bias = nn.Parameter(torch.zeros(2 * num_channel))
+        self.in_proj_qkv_weights = nn.Parameter(torch.randn(3 * num_channel, num_channel) * eps)
+        self.in_proj_qkv_bias = nn.Parameter(torch.zeros(3 * num_channel))
         self.out_proj_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
         self.random_init()
@@ -302,15 +302,19 @@ class FlexTokenBlock(pf.PoolFormerBlock):
 
 
 if __name__ == '__main__':
-    f = FlexFormer(10, 3, [384, 224], 5, 16).cuda()
-    print(f)
-    print(f(torch.randn(128, 3, 384, 224).cuda()).shape)
-    f.model.fork_feat = True
-    f.model.out_indices = [0, 2, 4, 6]
-    for i in f.model.out_indices:
-        f.model.add_module(f'norm{i}', nn.Identity())
-    seg_hat = f(torch.randn(128, 3, 384, 224).cuda())
-    for i, feat in enumerate(seg_hat):
-        print(i, feat.shape)
-    # mask = FlexFormer.generate_block_mask(4, 3, torch.tensor([64, 64]), 'cpu')
-    # pass
+    for p in [256, 320, 512, 768, 1024]:
+        print('patch size', p)
+        patch_size = [p]*2
+        torch.cuda.reset_peak_memory_stats()
+        f = FlexFormer(10, 3, patch_size, 5, 16).cuda()
+        #print(f)
+        print(f(torch.randn(8, 3, *patch_size).cuda()).shape)
+        f.model.fork_feat = True
+        f.model.out_indices = [0, 2, 4, 6]
+        for i in f.model.out_indices:
+            f.model.add_module(f'norm{i}', nn.Identity())
+        seg_hat = f(torch.randn(8, 3, *patch_size).cuda())
+        for i, feat in enumerate(seg_hat):
+            print(i, feat.shape)
+        peak_memory = torch.cuda.max_memory_allocated() / (1024 ** 2)
+        print(f"Peak memory usage: {peak_memory:.2f} MB\n")
