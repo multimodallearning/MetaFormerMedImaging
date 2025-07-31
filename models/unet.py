@@ -40,7 +40,7 @@ class UNetSegmentator(SegmentatorBase):
             Task.current_task().set_name(f'unet{self.hparams.size}_{self.hparams.ds_name}')
 
 class UNetOnPatchEmbedding(SegmentatorBase):
-    def __init__(self, ds_name: str, size:str = 's', in_patch_size:int=7, in_stride:int=4, in_padding=2):
+    def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3, in_patch_size:int=7, in_stride:int=4, in_padding=2):
         super().__init__(ds_name)
         size = size.upper()
         assert size in ['S', 'M']
@@ -54,6 +54,8 @@ class UNetOnPatchEmbedding(SegmentatorBase):
         self.patch_embedding = PatchEmbed(in_patch_size, in_stride, in_padding, self.n_channels, channels[0])
         self.model = UNet(
             spatial_dims=2,
+            kernel_size=conv_kernel,
+            up_kernel_size=conv_kernel,
             in_channels=channels[0],
             out_channels=self.n_classes,
             channels=channels,
@@ -79,7 +81,7 @@ class UNetOnPatchEmbedding(SegmentatorBase):
 
 if __name__ == '__main__':
     import torch
-    m = UNetOnPatchEmbedding('wristbone', 's')
+    m = UNetOnPatchEmbedding('wristbone', 's', 7)
     print(m)
     x = torch.randn(2, 1, 384, 224)
     y_hat = m(x)

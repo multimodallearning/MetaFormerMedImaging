@@ -18,7 +18,7 @@ class TIGERDataModule(LightningDataModule):
         super().__init__()
         assert batch_size % 4 == 0, 'Batch size must be divisible by 4, because we extract four equal space patches for validation.'
         self.batch_size = batch_size
-        self.dl_kwargs = {'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
+        self.dl_kwargs = {'num_workers': 6, 'pin_memory': torch.cuda.is_available()}
         self.spatial_size = spatial_size
         mean = torch.tensor([0.7158108353614807, 0.5380678772926331, 0.676334798336029])
         std = torch.tensor([0.19980138540267944, 0.23654648661613464, 0.18582996726036072])
