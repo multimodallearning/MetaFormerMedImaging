@@ -16,7 +16,7 @@ flex_attention_compiled = torch.compile(flex_attention, dynamic=True)
 
 class FlexTokenMixer(nn.Module):
     def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = False,
-                 use_slopes: bool = False, eps: float = 0.02):
+                 use_slopes: bool = False, eps: float = 0.02, init_as_pooling: bool = False):
         """
         FlexTokenMixer with local self-attention to replace AvgPool in PoolFormer. It is initialized to mimic AvgPool.
         :param num_channel: input channel and output channel
@@ -43,11 +43,18 @@ class FlexTokenMixer(nn.Module):
             self.pos_emb_proj.apply(lambda m: self.near_zero_init(m, eps))
         self.kernel_options = {"BLOCK_M": 16, "BLOCK_N": 16}  # todo would be nice to have this optimzed
 
-        self.in_proj_qkv_weights = nn.Parameter(torch.randn(3 * num_channel, num_channel) * eps)
-        self.in_proj_qkv_bias = nn.Parameter(torch.zeros(3 * num_channel))
+        self.init_as_pooling = init_as_pooling
         self.out_proj_weights = nn.Parameter(torch.eye(num_channel))
         self.out_proj_bias = nn.Parameter(torch.zeros(num_channel))
-        self.random_init()
+        if init_as_pooling:
+            self.in_proj_qk_weights = nn.Parameter(torch.randn(2 * num_channel, num_channel) * eps)
+            self.in_proj_qk_bias = nn.Parameter(torch.zeros(2 * num_channel))
+            self.in_proj_v_weights = nn.Parameter(torch.eye(num_channel))
+            self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
+        else:
+            self.in_proj_qkv_weights = nn.Parameter(torch.randn(3 * num_channel, num_channel) * eps)
+            self.in_proj_qkv_bias = nn.Parameter(torch.zeros(3 * num_channel))
+            self.random_init()
 
     @staticmethod
     def near_zero_init(m: nn.Module, var: float):
@@ -57,7 +64,8 @@ class FlexTokenMixer(nn.Module):
 
     # adapted from nn.Linear.reset_parameters()
     def random_init(self) -> None:
-        for layer_name in ['in_proj_qkv', 'out_proj']:
+        layers2init = ['in_proj_qk', 'in_proj_v', 'out_proj'] if self.init_as_pooling else ['in_proj_qkv', 'out_proj']
+        for layer_name in layers2init:
             weights = getattr(self, f'{layer_name}_weights')
             init.kaiming_uniform_(weights, a=math.sqrt(5))
 
@@ -74,7 +82,12 @@ class FlexTokenMixer(nn.Module):
             x_ = x_ + pos_emb_projected
         if cls is not None:  # concat class token
             x_ = torch.cat([cls.unsqueeze(1), x_], dim=1)  # (B, N+1, C)
-        q, k, v = F.linear(x_, self.in_proj_qkv_weights, self.in_proj_qkv_bias).chunk(3, dim=-1)
+
+        if self.init_as_pooling:
+            q, k = F.linear(x_, self.in_proj_qk_weights, self.in_proj_qk_bias).chunk(2, dim=-1)
+            v = F.linear(x_, self.in_proj_v_weights, self.in_proj_v_bias)
+        else:
+            q, k, v = F.linear(x_, self.in_proj_qkv_weights, self.in_proj_qkv_bias).chunk(3, dim=-1)
 
         q_ = self.view4heads(q, self.num_heads)
         k_ = self.view4heads(k, self.num_heads)
@@ -178,7 +191,7 @@ class FlexFormer(nn.Module):
                 num_channel = blocks[l].norm1.num_channels
                 enable_pe = (l == 0) and learn_pe
                 blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, learn_pos_emb=enable_pe,
-                                                       use_slopes=use_slopes)
+                                                       use_slopes=use_slopes, init_as_pooling=True)
                 if not pretrained:
                     blocks[l].token_mixer.random_init()
 
