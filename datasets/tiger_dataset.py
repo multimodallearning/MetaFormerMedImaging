@@ -46,12 +46,6 @@ class TIGERDataModule(LightningDataModule):
             for img_path in test_data
         ]
 
-        self.test_ds = data.CacheDataset(test_data, cache_rate=cache_rate, num_workers=None,
-                                         transform=transforms.Compose([
-                                             *self.base_transform,
-                                             transforms.GridSplitD(['image', 'label'], (2, 2), self.spatial_size),
-                                         ]))
-
         if stage == 'fit':
             # calculate class weights
             lbl_ratio = (1 / LBL_CNT) ** 0.5
@@ -71,15 +65,26 @@ class TIGERDataModule(LightningDataModule):
                                                   #                                    random_center=True),
                                               ]))
 
+            self.val_ds = data.CacheDataset(test_data, cache_rate=cache_rate, num_workers=None,
+                                            transform=transforms.Compose([
+                                                *self.base_transform,
+                                                transforms.GridSplitD(['image', 'label'], (2, 2), self.spatial_size),
+                                            ]))
+        elif stage == 'test':
+            # skip padding
+            self.test_ds = data.Dataset(test_data, transform=transforms.Compose(self.base_transform[:-1]))
+        else:
+            raise ValueError(f'Unknown stage: {stage}')
+
     def train_dataloader(self):
         return data.DataLoader(self.train_ds, batch_size=self.batch_size, shuffle=True, **self.dl_kwargs,
                                drop_last=True)
 
     def val_dataloader(self):
-        return data.DataLoader(self.test_ds, batch_size=self.batch_size // 4, **self.dl_kwargs, drop_last=True)
+        return data.DataLoader(self.val_ds, batch_size=self.batch_size // 4, **self.dl_kwargs, drop_last=True)
 
     def test_dataloader(self):
-        return data.DataLoader(self.test_ds, batch_size=self.batch_size // 4, **self.dl_kwargs)
+        return data.DataLoader(self.test_ds, batch_size=1, **self.dl_kwargs)
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         return batch['image'].as_tensor(), batch['label'].as_tensor()  # match structure of the other datasets
