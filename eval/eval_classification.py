@@ -12,7 +12,7 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "0988b7b0514e40ba993639c05f81f801"
+task_id = "d05ff0f2ddc04437a7a994699340dce8"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,3 +67,5 @@ df.set_index('label', inplace=True)
 df = pd.concat([df, df.describe().loc[['mean', 'std']]])
 print('\n', task.name)
 print(df.to_string())
+print(', '.join(map(lambda s:str(round(s, 4)), df.loc['mean', ['acc', 'auroc', 'f1']])))
+print(task.name)

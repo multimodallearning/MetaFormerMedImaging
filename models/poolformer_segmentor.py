@@ -62,7 +62,7 @@ class MetaFormerSegmentator(SegmentatorBase):
                 for l in range(len(blocks)):
                     num_channel = blocks[l].norm1.num_channels
                     blocks[l].token_mixer = FlexTokenMixer(num_channel, num_heads, block_mask, use_slopes=use_slopes,
-                                                           learn_pos_emb=(l == 0) and learn_pe)
+                                                           learn_pos_emb=(l == 0) and learn_pe, init_as_pooling=False)
                     if not pretrained: # else token mixer initialization mimic avg pooling
                         blocks[l].token_mixer.random_init()
             elif token_mixer == 'full_attn':
@@ -81,7 +81,12 @@ class MetaFormerSegmentator(SegmentatorBase):
                 for l in range(len(blocks)):
                     num_channel = blocks[l].norm1.num_channels
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
-                                                      stride=1, padding=kernel_size // 2, groups=1)  # num_channel)
+                                                      stride=1, padding=kernel_size // 2, groups=1)
+            elif token_mixer == 'sep_conv':
+                for l in range(len(blocks)):
+                    num_channel = blocks[l].norm1.num_channels
+                    blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
+                                                      stride=1, padding=kernel_size // 2, groups=num_channel)
             else:
                 raise ValueError(f'Unknown tokenmixer {token_mixer}')
 

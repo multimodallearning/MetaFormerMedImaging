@@ -34,18 +34,24 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "ea8ebf3d2ec1490b94e92a78e6f83bc0"
+task_id = "80ca4198e4ea4210aee0d66007911330"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # load model
-model_class = param['Args/fit.model.class_path']
+try:
+    model_class = param['Args/fit.model.class_path']
+except KeyError:
+    model_class = "models.poolformer_segmentor.MetaFormerSegmentator"
 model = get_class_from_path(model_class).load_from_checkpoint(task.artifacts['best.ckpt'].get_local_copy()).eval()
 model = model.to(device)
 
 # load dataset
-dataset_class = param['Args/fit.data.class_path']
+try:
+    dataset_class = param['Args/fit.data.class_path']
+except KeyError: # work around since the first trainings were only implemented on Graz
+    dataset_class = 'datasets.grazpedwri_dataset.SegGrazPedWriDataModule'
 dataset_name = dataset_class.split('.')[-1]
 mask_background = False
 if dataset_name == 'JSRTDataModule':
@@ -56,9 +62,14 @@ elif dataset_name == 'TIGERDataModule':
     dataset = get_class_from_path(dataset_class)(8, param['Args/fit.data.init_args.spatial_size'])
     dataset.trainer = FakeTrainer()
     transform = transforms.ToDevice(device)  # z-std already done within dataset
-    inferer = inferers.SlidingWindowInferer(param['Args/fit.data.init_args.spatial_size'], 8,
+    inferer = inferers.SlidingWindowInferer(param['Args/fit.data.init_args.spatial_size'], 1,
                                            mode='gaussian' ,padding_mode='reflect', device='cpu')
     mask_background = True
+elif dataset_name == 'SegGrazPedWriDataModule':
+    dataset = get_class_from_path(dataset_class)(32, False)
+    transform = transforms.Compose([transforms.NormalizeIntensity(dataset.mean, dataset.std),
+                                    transforms.ToDevice(device), transforms.ToTensor(track_meta=False)])
+    inferer = inferers.SimpleInferer()
 else:
     raise NotImplementedError(f'Datset class {dataset_class} not know.')
 dataset.setup('test')
@@ -90,6 +101,8 @@ dsc_stats = torch.stack([dsc_values.nanmean(0), nanstd(dsc_values, 0)], 1)
 df = pd.DataFrame(dsc_stats, columns=['mean', 'std'])
 df['label'] = model.label
 df.set_index('label', inplace=True)
-df.loc['GLOBAL'] = [dsc_values.nanmean().item(), dsc_values[~dsc_values.isnan()].std().item()]
+df.loc['global'] = [dsc_values.nanmean().item(), dsc_values[~dsc_values.isnan()].std().item()]
 print('\n', task.name)
 print(df.to_string())
+print(round(dsc_values.nanmean().item(), 4), '±', round(dsc_values[~dsc_values.isnan()].std().item(), 4))
+print(task.name)
