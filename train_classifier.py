@@ -10,6 +10,7 @@ from pytorch_lightning.cli import LightningCLI
 from models.cnn_classifier import CNNClassifier, ConvFormerClassifier
 from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier, MetaFormerClassifier
 from models.pretrained_metaformer_classifier import PretrainedMetaformer
+from models.metaformer_classifier import AdaptiveMetaformerClassifier
 from datasets.med_mnist_dataset import MedMNISTDataModule
 from datasets.imagewoof_dataset import ImageWoofDataModule
 

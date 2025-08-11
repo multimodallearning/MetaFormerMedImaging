@@ -11,12 +11,12 @@ from models.classifier_base import ClassifierBase
 
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 lr:float = 1e-4, drop_path: float = 0.1, rw_percentage: float = 0.4):
-        super().__init__(dataset_name, lr=lr)
+                 drop_path: float = 0.1):
+        super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.model = getattr(pf, model_name)(pretrained=pretrained)
-        # adapt classifer
+        # adapt classifier
         self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
         # adapt first conv to new number of input channel
         self.model.patch_embed.proj.weight = nn.Parameter(
@@ -28,6 +28,7 @@ class PoolFormerClassifier(ClassifierBase):
                 for l in range(len(blocks)):
                     if hasattr(blocks[l], 'drop_path'):
                         blocks[l].drop_path = pf.DropPath(drop_path)
+
 
         self.save_hyperparameters()
 
@@ -75,13 +76,16 @@ class MetaFormerClassifier(ClassifierBase):
 
 
 class FlexFormerClassifier(ClassifierBase):
-    def __init__(self, ds_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size:int=5,
-                 head_dim: int = 16, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1, use_slopes: bool = False,
-                 rw_percentage: float = None, learn_pe: bool = False, rpl_patch_emb:bool=False, use_cls_token:bool=False):
+    def __init__(self, ds_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True, kernel_size: int = 5,
+                 head_dim: int = 16, lr: float = 1e-4, patch_size: int = 224, drop_path: float = 0.1,
+                 use_slopes: bool = False,
+                 rw_percentage: float = None, learn_pe: bool = False, rpl_patch_emb: bool = False,
+                 use_cls_token: bool = False):
         super().__init__(ds_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size] * 2, kernel_size, head_dim,
-                                model_name, pretrained, use_cls_token, learn_pe, use_slopes, rpl_patch_emb, drop_path, rw_percentage)
+                                model_name, pretrained, use_cls_token, learn_pe, use_slopes, rpl_patch_emb, drop_path,
+                                rw_percentage)
 
         self.save_hyperparameters()
 
@@ -133,11 +137,12 @@ if __name__ == '__main__':
     from tqdm import trange
     from kornia.augmentation.auto import AutoAugment
 
-    poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
-    # poolformer = PoolFormerClassifier('imagewoof').cuda()
+    #poolformer = FlexFormerClassifier('OrganAMNIST', 'poolformer_s12', patch_size=224).cuda()
+    poolformer = PoolFormerClassifier('imagewoof', pool_size=5).cuda()
     print(poolformer.model)
+    exit(9)
 
-    #dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
+    # dm = ImageWoofDataModule(batch_size=128, use_data_aug=True, spatial_size=224)
     dm = MedMNISTDataModule('OrganAMNIST', batch_size=128, spatial_size=224, use_data_aug=True)
     dm.mean = dm.mean.cuda()
     dm.std = dm.std.cuda()
