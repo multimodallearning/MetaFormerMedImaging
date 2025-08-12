@@ -10,9 +10,9 @@ from models.classifier_base import ClassifierBase
 
 
 class AdaptiveMetaformerClassifier(ClassifierBase):
-    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5,
+    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5, lr:float=0.001,
                  head_dim: int = 16, drop_path: float = 0.1, device: str = "cuda"):
-        super().__init__(ds_name)
+        super().__init__(ds_name, lr)
         self.save_hyperparameters()
         self.model = getattr(pf, "poolformer_s12")(pretrained=False)
 

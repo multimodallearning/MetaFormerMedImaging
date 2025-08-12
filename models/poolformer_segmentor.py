@@ -103,4 +103,4 @@ class MetaFormerSegmentator(SegmentatorBase):
         if Task.current_task() is not None:
             model_name = self.hparams.model_name
             model_name = model_name.replace('pool', 'meta')
-            Task.current_task().set_name(f'{model_name}_{self.hparams.token_mixer}_{self.hparams.ds_name}')
+            Task.current_task().set_name(f'{model_name}_{self.hparams.token_mixer}_{self.hparams.ds_name} {self.hparams.kernel_size}²')
