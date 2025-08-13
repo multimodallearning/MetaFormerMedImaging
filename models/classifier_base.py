@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01, ce_label_smoothing: float = 0.1,
-                 warmup_epochs: int = 5, min_lr: float = 1e-5, loss_weight_max: float = 10):
+                 warmup_epochs: int = 5, min_lr: float = 1e-5, loss_weight_max: float = 10, use_scheduler:bool = True):
         super().__init__()
         # attributes
         self.is_2d = False
@@ -74,17 +74,20 @@ class ClassifierBase(LightningModule):
         self.val_loss = MeanMetric()
 
         self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr,
-                                  loss_weight_clamp_max=loss_weight_max)
+                                  loss_weight_clamp_max=loss_weight_max, use_scheduler=use_scheduler)
         if Task.current_task() is not None:
             Task.current_task().connect(vars(self.optim_hp), name='optimizer_hyperparameters')
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.optim_hp.lr, weight_decay=self.optim_hp.wd)
-        scheduler = CosineLRScheduler(optimizer, t_initial=self.trainer.max_epochs,
-                                      warmup_t=self.optim_hp.warmup_epochs,
-                                      warmup_lr_init=self.optim_hp.min_lr, lr_min=self.optim_hp.min_lr,
-                                      warmup_prefix=True)
-        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
+        if self.optim_hp.use_scheduler:
+            scheduler = CosineLRScheduler(optimizer, t_initial=self.trainer.max_epochs,
+                                          warmup_t=self.optim_hp.warmup_epochs,
+                                          warmup_lr_init=self.optim_hp.min_lr, lr_min=self.optim_hp.min_lr,
+                                          warmup_prefix=True)
+            return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
+        else:
+            return optimizer
 
     def lr_scheduler_step(self, scheduler: LRSchedulerTypeUnion, metric: Optional[Any]) -> None:
         scheduler.step(self.current_epoch)

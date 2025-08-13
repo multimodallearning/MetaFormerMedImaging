@@ -38,10 +38,10 @@ class RndAffineAug(torch.nn.Module):
 
 
 class MedMNISTDataModule(LightningDataModule):
-    def __init__(self, dataset_name: str, batch_size: int = 128, spatial_size: int = 224, data_aug: str = 'affine',
+    def __init__(self, ds_name: str, batch_size: int = 128, spatial_size: int = 224, data_aug: str = 'affine',
                  data_aug_std: float = 0.1):
         """
-        :param dataset_name: name of the dataset. Has to be one of the MedMNIST datasets
+        :param ds_name: name of the dataset. Has to be one of the MedMNIST datasets
         :param batch_size: batch size
         :param spatial_size: spatial size of the images
         :param data_aug: mode of data augmentation. [affine, nnUnet, None]
@@ -50,11 +50,11 @@ class MedMNISTDataModule(LightningDataModule):
         super().__init__()
         self.spatial_size = spatial_size
         self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
-        self.DataClass = getattr(medmnist, medmnist.INFO[dataset_name.lower()]['python_class'])
+        self.DataClass = getattr(medmnist, medmnist.INFO[ds_name.lower()]['python_class'])
 
         assert data_aug in [None, 'affine', 'nnUnet'], 'Unknown data augmentation mode.'
         self.use_data_aug = data_aug is not None
-        allow_flipping = ALLOW_FLIPPING[dataset_name.lower()]
+        allow_flipping = ALLOW_FLIPPING[ds_name.lower()]
         if issubclass(self.DataClass, medmnist.dataset.MedMNIST2D):
             if data_aug == 'nnUnet':
                 self.data_aug = nnunet_data_aug.nnUNetDataAugmentation2D(allow_flipping)
@@ -68,7 +68,7 @@ class MedMNISTDataModule(LightningDataModule):
         else:
             raise ValueError(f"Unknown MedMNIST dataset class: {self.DataClass}")
 
-        img_stats = IMG_MEAN_STD[dataset_name.lower()]
+        img_stats = IMG_MEAN_STD[ds_name.lower()]
         self.mean = torch.tensor(img_stats.mean).view(1, -1, 1, 1)
         self.std = torch.tensor(img_stats.std).view(1, -1, 1, 1)
 

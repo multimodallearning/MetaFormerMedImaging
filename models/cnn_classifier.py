@@ -10,10 +10,11 @@ from timm.models import adapt_input_conv
 
 
 class CNNClassifier(ClassifierBase):
-    def __init__(self, dataset_name: str, model: str = 'resnet34', pretrained: bool = False, kernel: int = 3):
-        super().__init__(dataset_name)
+    def __init__(self, ds_name: str, model: str = 'resnet18', pretrained: bool = False, kernel: int = 3,
+                 use_scheduler: bool = True):
+        super().__init__(ds_name, use_scheduler=use_scheduler)
         self.model_name = model
-        self.ds_name = dataset_name
+        self.ds_name = ds_name
         if self.is_2d:
             self.model = timm.create_model(model, pretrained=pretrained, num_classes=self.n_classes,
                                            in_chans=self.n_channels)
@@ -38,7 +39,7 @@ class CNNClassifier(ClassifierBase):
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
             Task.current_task().set_name(f'{self.model_name}_{self.ds_name}')
-            Task.current_task().set_tags([f'{self.ds_name}', f'{self.model_name}'])
+            #Task.current_task().set_tags([f'{self.ds_name}', f'{self.model_name}'])
 
 
 class ConvFormerClassifier(ClassifierBase):
@@ -86,7 +87,7 @@ class ConvFormerClassifier(ClassifierBase):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    m = CNNClassifier('imagewoof', kernel=5)
+    m = CNNClassifier('imagewoof', kernel=3)
     print(m)
     x = torch.randn(8, 3, 224, 224)
     y_hat = m(x)
