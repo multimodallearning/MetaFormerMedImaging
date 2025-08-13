@@ -79,7 +79,12 @@ class PretrainedMetaformer(ClassifierBase):
                 for l in range(len(blocks)):
                     num_channel = blocks[l].token_mixer.qkv.in_features
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
-                                                      stride=1, padding=kernel_size // 2, groups=1)  # num_channel)
+                                                      stride=1, padding=kernel_size // 2, groups=1)
+            elif tokenmixer == 'sep_conv':
+                for l in range(len(blocks)):
+                    num_channel = blocks[l].token_mixer.qkv.in_features
+                    blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
+                                                      stride=1, padding=kernel_size // 2, groups=num_channel)
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
         # self.model = torch.compile(self.model)
