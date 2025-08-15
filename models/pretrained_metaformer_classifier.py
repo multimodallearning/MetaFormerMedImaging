@@ -71,7 +71,16 @@ class PretrainedMetaformer(ClassifierBase):
                         blocks[l].token_mixer.out_proj_weights = out_proj_weights
                         blocks[l].token_mixer.out_proj_bias = out_proj_bias
             elif tokenmixer == 'full_attn':
-                pass  # full attention is already the default token mixer
+                if not attention_weights_warm_start:
+                    for l in range(len(blocks)):
+                        num_channel = blocks[l].token_mixer.qkv.in_features
+                        if l == 0:
+                            blocks[l].token_mixer = nn.Sequential(
+                                mf.AddPositionEmb(num_channel, stage_patch_size.int().tolist()),
+                                mf.Attention(num_channel, head_dim)
+                            )
+                        else:
+                            blocks[l].token_mixer = mf.Attention(num_channel, head_dim)
             elif tokenmixer == 'pooling':
                 for l in range(len(blocks)):
                     blocks[l].token_mixer = mf.Pooling(pool_size=kernel_size)
@@ -85,6 +94,9 @@ class PretrainedMetaformer(ClassifierBase):
                     num_channel = blocks[l].token_mixer.qkv.in_features
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
                                                       stride=1, padding=kernel_size // 2, groups=num_channel)
+            elif tokenmixer == 'identity':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = nn.Identity()
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
         # self.model = torch.compile(self.model)

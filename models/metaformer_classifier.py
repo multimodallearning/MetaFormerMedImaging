@@ -71,6 +71,9 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
                     num_channel = blocks[l].norm1.num_channels
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
                                                       stride=1, padding=kernel_size // 2, groups=num_channel)
+            elif tokenmixer == 'identity':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = nn.Identity()
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
 
@@ -84,7 +87,7 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
 
 
 if __name__ == '__main__':
-    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv']:
+    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:
         m = AdaptiveMetaformerClassifier('imagewoof', mixer_name).cuda()
         print('\n', mixer_name)
         print(m)

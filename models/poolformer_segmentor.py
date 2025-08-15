@@ -87,6 +87,9 @@ class MetaFormerSegmentator(SegmentatorBase):
                     num_channel = blocks[l].norm1.num_channels
                     blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
                                                       stride=1, padding=kernel_size // 2, groups=num_channel)
+            elif token_mixer == 'identity':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = nn.Identity()
             else:
                 raise ValueError(f'Unknown tokenmixer {token_mixer}')
 
