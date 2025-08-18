@@ -107,7 +107,7 @@ class PretrainedMetaformer(ClassifierBase):
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
             Task.current_task().set_name(
-                f'metaformer_{self.hparams.tokenmixer}_finetuned_{self.hparams.ds_name}')
+                f'metaformer_{self.hparams.tokenmixer}_finetuned_{self.hparams.ds_name} {self.hparams.kernel_size}²')
 
 
 if __name__ == '__main__':

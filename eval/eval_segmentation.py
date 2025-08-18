@@ -34,7 +34,7 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "80ca4198e4ea4210aee0d66007911330"
+task_id = "45259ce34cd04c7ea6a0ec706333a916"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"

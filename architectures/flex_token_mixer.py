@@ -51,6 +51,7 @@ class FlexTokenMixer(nn.Module):
             self.in_proj_qk_bias = nn.Parameter(torch.zeros(2 * num_channel))
             self.in_proj_v_weights = nn.Parameter(torch.eye(num_channel))
             self.in_proj_v_bias = nn.Parameter(torch.zeros(num_channel))
+            print('Local self attention initialized as pooling. This will reduce its performance.')
         else:
             self.in_proj_qkv_weights = nn.Parameter(torch.randn(3 * num_channel, num_channel) * eps)
             self.in_proj_qkv_bias = nn.Parameter(torch.zeros(3 * num_channel))
@@ -101,7 +102,8 @@ class FlexTokenMixer(nn.Module):
             cls = y_[:, 0, :]
             y_ = y_[:, 1:, :]  # remove class token
         y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
-        y -= x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
+        if self.init_as_pooling:
+            y -= x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
         return y if cls is None else (y, cls)
 
     @staticmethod

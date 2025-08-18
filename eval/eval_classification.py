@@ -4,6 +4,9 @@ import torch
 from torchmetrics import classification, MetricCollection
 from tqdm import tqdm
 import pandas as pd
+import os
+
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def get_class_from_path(path: str):
@@ -12,7 +15,7 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "d05ff0f2ddc04437a7a994699340dce8"
+task_id = "bca658bca3fc42d0a63093f1457f83ae"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -25,12 +28,13 @@ model = model.to(device)
 # load dataset
 dataset_class = param['Args/fit.data.class_path']
 dataset_name = dataset_class.split('.')[-1]
+
 if dataset_name == 'ImageWoofDataModule':
     dataset = get_class_from_path(dataset_class)(256, param['Args/fit.data.init_args.spatial_size'], False)
     mean = dataset.mean
     std = dataset.std
 elif dataset_name == 'MedMNISTDataModule':
-    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.dataset_name'], 256,
+    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.ds_name'], 16,
                                                  param['Args/fit.data.init_args.spatial_size'], None)
     mean = dataset.mean
     std = dataset.std
@@ -68,4 +72,4 @@ df = pd.concat([df, df.describe().loc[['mean', 'std']]])
 print('\n', task.name)
 print(df.to_string())
 print(', '.join(map(lambda s:str(round(s, 4)), df.loc['mean', ['acc', 'auroc', 'f1']])))
-print(task.name)
+print(task.name, param['Args/fit.model.init_args.kernel_size'])
