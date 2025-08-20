@@ -5,6 +5,7 @@ from torchmetrics import classification, MetricCollection
 from tqdm import tqdm
 import pandas as pd
 import os
+import argparse
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
@@ -15,7 +16,12 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "bca658bca3fc42d0a63093f1457f83ae"
+parser = argparse.ArgumentParser("Evaluate experiment")
+parser.add_argument("task_id", type=str, help="ClearML task ID")
+
+task_id = parser.parse_args().task_id
+
+#task_id = "c3e820787a3d4b73b06859e6a47a763b"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -34,7 +40,7 @@ if dataset_name == 'ImageWoofDataModule':
     mean = dataset.mean
     std = dataset.std
 elif dataset_name == 'MedMNISTDataModule':
-    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.ds_name'], 16,
+    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.ds_name'], param['Args/fit.data.init_args.batch_size'],
                                                  param['Args/fit.data.init_args.spatial_size'], None)
     mean = dataset.mean
     std = dataset.std
