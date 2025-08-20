@@ -209,10 +209,10 @@ Using of pretrained MetaFormer (PPAA). Reuse attention weights for local self at
 
 | Token Mixer | Kernel Size | Dice                   |
 |:------------|-------------|------------------------|
-| loc_attn    | 3           |                        |
-|             | 5           |                        |
-|             | 7           |                        |
-|             | 9           |                        |
+| loc_attn    | 3           | 0.5311 ± 0.3274        |
+|             | 5           | 0.5379 ± 0.3318        |
+|             | 7           | 0.5347 ± 0.338         |
+|             | 9           | 0.5498 ± 0.3344        |
 | conv        | 3           | 0.5694 ± 0.3286        |
 |             | 5           | 0.5599 ± 0.3332        |
 |             | 7           | 0.5603 ± 0.3325        |
