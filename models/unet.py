@@ -7,7 +7,7 @@ from models.segmentator_base import SegmentatorBase
 
 
 class UNetSegmentator(SegmentatorBase):
-    def __init__(self, ds_name: str, size:str = 's'):
+    def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3):
         super().__init__(ds_name)
         size = size.upper()
         assert size in ['S', 'M']
@@ -20,6 +20,8 @@ class UNetSegmentator(SegmentatorBase):
 
         self.model = UNet(
             spatial_dims=2,
+            kernel_size=conv_kernel,
+            up_kernel_size=conv_kernel,
             in_channels=self.n_channels,
             out_channels=self.n_classes,
             channels=channels,
@@ -27,7 +29,7 @@ class UNetSegmentator(SegmentatorBase):
             act='leakyrelu',
             norm=('Instance', {'affine': True}),
             bias=False,
-            num_res_units=1
+            num_res_units={3:2, 5:1, 7:1}[conv_kernel]
         )
 
         self.save_hyperparameters()
@@ -63,7 +65,7 @@ class UNetOnPatchEmbedding(SegmentatorBase):
             act='leakyrelu',
             norm=('Instance', {'affine': True}),
             bias=False,
-            num_res_units=4
+            num_res_units={3:6, 5:4, 7:4}[conv_kernel]
         )
         self.upsample = nn.Upsample(scale_factor=in_stride, mode='bilinear', align_corners=False)
 
@@ -81,7 +83,7 @@ class UNetOnPatchEmbedding(SegmentatorBase):
 
 if __name__ == '__main__':
     import torch
-    m = UNetOnPatchEmbedding('wristbone', 's', 7)
+    m = UNetOnPatchEmbedding('wristbone', 's', 3)
     print(m)
     x = torch.randn(2, 1, 384, 224)
     y_hat = m(x)
