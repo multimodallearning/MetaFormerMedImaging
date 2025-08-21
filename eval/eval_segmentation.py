@@ -7,6 +7,7 @@ import pandas as pd
 from monai import transforms, inferers, metrics
 from dataclasses import dataclass
 from matplotlib import pyplot as plt
+import argparse
 
 
 @dataclass
@@ -34,7 +35,11 @@ def get_class_from_path(path: str):
     return getattr(module, class_name)
 
 
-task_id = "45259ce34cd04c7ea6a0ec706333a916"
+parser = argparse.ArgumentParser("Evaluate experiment")
+parser.add_argument("task_id", type=str, help="ClearML task ID")
+
+task_id = parser.parse_args().task_id
+#task_id = "45259ce34cd04c7ea6a0ec706333a916"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
