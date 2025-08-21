@@ -29,7 +29,7 @@ class UNetSegmentator(SegmentatorBase):
             act='leakyrelu',
             norm=('Instance', {'affine': True}),
             bias=False,
-            num_res_units={3:2, 5:1, 7:1}[conv_kernel]
+            num_res_units={3:2, 5:1, 7:1, 9:1}[conv_kernel]
         )
 
         self.save_hyperparameters()
@@ -65,7 +65,7 @@ class UNetOnPatchEmbedding(SegmentatorBase):
             act='leakyrelu',
             norm=('Instance', {'affine': True}),
             bias=False,
-            num_res_units={3:6, 5:4, 7:4}[conv_kernel]
+            num_res_units={3:6, 5:4, 7:4, 9:3}[conv_kernel]
         )
         self.upsample = nn.Upsample(scale_factor=in_stride, mode='bilinear', align_corners=False)
 
@@ -83,7 +83,7 @@ class UNetOnPatchEmbedding(SegmentatorBase):
 
 if __name__ == '__main__':
     import torch
-    m = UNetOnPatchEmbedding('wristbone', 's', 3)
+    m = UNetSegmentator('wristbone', 's', 9)
     print(m)
     x = torch.randn(2, 1, 384, 224)
     y_hat = m(x)
