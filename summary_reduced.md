@@ -126,9 +126,9 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 | sep_conv    | 3           | 0.7915, 0.9534, 0.7937 | 0.8888, 0.9803, 0.884  | 0.7138, 0.8867, 0.7029 | 0.9474, 0.9886, 0.9532 | 0.7837, 0.9535, 0.7863 |
 |             | 5           | 0.7694, 0.9412, 0.7713 | 0.9068, 0.9821, 0.9065 | 0.7091, 0.8746, 0.7062 | 0.9534, 0.9863, 0.9569 | 0.7961, 0.941, 0.8001  |
 |             | 7           | 0.7411, 0.9341, 0.7424 | 0.8927, 0.9798, 0.8884 | 0.6882, 0.8681, 0.7121 | 0.9521, 0.9878, 0.9552 | 0.785, 0.944, 0.7871   |
-| locAttn *   | 3           |                        |                        |                        |                        |                        |
-|             | 5           |                        |                        |                        |                        |                        |
-|             | 7           |                        |                        |                        |                        |                        |
+| locAttn *   | 3           |                        |                      # |                      # |                      # | 0.7852, 0.9384, 0.7868 |
+|             | 5           |                        |                      # | 0.6999, 0.8538, 0.7199 |                      # | 0.783, 0.9274, 0.7875  |
+|             | 7           |                        |                      # | 0.692, 0.8458, 0.7081  |                      # | 0.7826, 0.9326, 0.7866 |
 | full_attn + | -           | 0.5439, 0.8885, 0.5408 | 0.8778, 0.9802, 0.8647 | 0.6046, 0.9174, 0.5384 | 0.8688, 0.9493, 0.881  | 0.7357, 0.9679, 0.741  |
 | identity    | -           | 0.7695, 0.9575, 0.7698 | 0.8913, 0.9756, 0.8822 | 0.6722, 0.8784, 0.6761 | 0.9432, 0.9883, 0.9466 | 0.7687, 0.9626, 0.772  |
 | ResNet18    | 3           |                        |                        |                        |                        |                        |
@@ -136,6 +136,7 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 |             | 7           |                        |                        |                        |                        |                        |
 
 (*) reduced lr to 1e-4 but doubled epochs due to training instabilities
+(#) even with reduced lr, training was instable -> disabled compilation, used half batch size and grad accumulation of 2
 (+) reduced batch size by factor 4 and use grad accumulation of 4
 
 ## Pretrained MetaFormer
