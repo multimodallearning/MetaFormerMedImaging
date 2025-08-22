@@ -131,6 +131,9 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 |             | 7           |                        |                        |                        |                        |                        |
 | full_attn + | -           | 0.5439, 0.8885, 0.5408 | 0.8778, 0.9802, 0.8647 | 0.6046, 0.9174, 0.5384 | 0.8688, 0.9493, 0.881  | 0.7357, 0.9679, 0.741  |
 | identity    | -           | 0.7695, 0.9575, 0.7698 | 0.8913, 0.9756, 0.8822 | 0.6722, 0.8784, 0.6761 | 0.9432, 0.9883, 0.9466 | 0.7687, 0.9626, 0.772  |
+| ResNet18    | 3           |                        |                        |                        |                        |                        |
+|             | 5           |                        |                        |                        |                        |                        |
+|             | 7           |                        |                        |                        |                        |                        |
 
 (*) reduced lr to 1e-4 but doubled epochs due to training instabilities
 (+) reduced batch size by factor 4 and use grad accumulation of 4
@@ -159,6 +162,7 @@ Using of pretrained MetaFormer (PPAA). Reuse attention weights for local self at
 | fullAttn              | -           | 0.8641, 0.9646, 0.8662 | 0.8995, 0.9799, 0.8962 | 0.7451, 0.9046, 0.7714 | 0.9286, 0.9887, 0.9386 | 0.7667, 0.9512, 0.7732 |
 | fullAttn (warm start) | -           | 0.8908, 0.992, 0.8939  | 0.9011, 0.9847, 0.899  | 0.7672, 0.9067, 0.7821 | 0.9444, 0.9915, 0.9513 | 0.7792, 0.9314, 0.785  |
 | identity              | -           | 0.8597, 0.984, 0.8604  | 0.7985, 0.9511, 0.7792 | 0.8056, 0.9646, 0.8077 | 0.9291, 0.9911, 0.9402 |                        |
+| ResNet18              | 3           |                        |                        |                        |                        |                        |
 
 ## MetaFormer as Encoder for Semantic Segmentation
 

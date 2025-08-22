@@ -10,7 +10,7 @@ from timm.models import adapt_input_conv
 
 
 class CNNClassifier(ClassifierBase):
-    def __init__(self, ds_name: str, model: str = 'resnet18', pretrained: bool = False, kernel: int = 3,
+    def __init__(self, ds_name: str, model: str = 'resnet18', pretrained: bool = False, kernel_size: int = 3,
                  use_scheduler: bool = True):
         super().__init__(ds_name, use_scheduler=use_scheduler)
         self.model_name = model
@@ -21,15 +21,15 @@ class CNNClassifier(ClassifierBase):
         elif self.is_3d:
             raise NotImplementedError("3D models not implemented yet")
 
-        if kernel != 3:
+        if kernel_size != 3:
             assert isinstance(self.model, ResNet), "Only ResNet models support kernel size adaptation"
             for i in range(1, 5):
                 seq = getattr(self.model, f'layer{i}')
                 for j in range(len(seq)):
-                    seq[j].conv1 = nn.Conv2d(seq[j].conv1.in_channels, seq[j].conv1.out_channels, kernel_size=kernel,
-                                             stride=seq[j].conv1.stride, padding=kernel // 2, bias=False)
-                    seq[j].conv2 = nn.Conv2d(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel,
-                                             stride=seq[j].conv2.stride, padding=kernel // 2, bias=False)
+                    seq[j].conv1 = nn.Conv2d(seq[j].conv1.in_channels, seq[j].conv1.out_channels, kernel_size=kernel_size,
+                                             stride=seq[j].conv1.stride, padding=kernel_size // 2, bias=False)
+                    seq[j].conv2 = nn.Conv2d(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel_size,
+                                             stride=seq[j].conv2.stride, padding=kernel_size // 2, bias=False)
 
         self.save_hyperparameters()
 
@@ -87,7 +87,7 @@ class ConvFormerClassifier(ClassifierBase):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    m = CNNClassifier('imagewoof', kernel=3)
+    m = CNNClassifier('imagewoof', kernel_size=7)
     print(m)
     x = torch.randn(8, 3, 224, 224)
     y_hat = m(x)
