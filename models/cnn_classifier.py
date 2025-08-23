@@ -38,8 +38,9 @@ class CNNClassifier(ClassifierBase):
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
-            Task.current_task().set_name(f'{self.model_name}_{self.ds_name}')
-            #Task.current_task().set_tags([f'{self.ds_name}', f'{self.model_name}'])
+            Task.current_task().set_name(f'{self.model_name}_{self.ds_name} {self.hparams.kernel_size}²')
+            if self.hparams.pretrained:
+                Task.current_task().set_tags(['finetuned'])
 
 
 class ConvFormerClassifier(ClassifierBase):
