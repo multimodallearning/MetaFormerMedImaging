@@ -1,13 +1,13 @@
-from clearml import Task
-import importlib
-import torch
-from torchmetrics.classification import F1Score
-from tqdm import tqdm
-import pandas as pd
-from monai import transforms, inferers, metrics
-from dataclasses import dataclass
-from matplotlib import pyplot as plt
 import argparse
+import importlib
+from dataclasses import dataclass
+
+import pandas as pd
+import torch
+from clearml import Task
+from monai import transforms, inferers, metrics
+from tqdm import tqdm
+from torch.nn.functional import one_hot
 
 
 @dataclass
@@ -29,6 +29,14 @@ def nanstd(o, dim, keepdim=False):
     return result
 
 
+def to_one_hot(x: torch.Tensor, c: int):
+    assert x.dim() == 4
+    assert x.shape[1] == 1
+    x = one_hot(x.long(), c)
+    x = x.squeeze(1).permute(0, 3, 1, 2)
+    return x
+
+
 def get_class_from_path(path: str):
     module_path, class_name = path.rsplit(".", 1)  # Split module vs class
     module = importlib.import_module(module_path)
@@ -39,7 +47,7 @@ parser = argparse.ArgumentParser("Evaluate experiment")
 parser.add_argument("task_id", type=str, help="ClearML task ID")
 
 task_id = parser.parse_args().task_id
-#task_id = "45259ce34cd04c7ea6a0ec706333a916"
+#task_id = "88ddd779315a4861a4e93aeac5fe5ccd"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -55,7 +63,7 @@ model = model.to(device)
 # load dataset
 try:
     dataset_class = param['Args/fit.data.class_path']
-except KeyError: # work around since the first trainings were only implemented on Graz
+except KeyError:  # work around since the first trainings were only implemented on Graz
     dataset_class = 'datasets.grazpedwri_dataset.SegGrazPedWriDataModule'
 dataset_name = dataset_class.split('.')[-1]
 mask_background = False
@@ -68,7 +76,7 @@ elif dataset_name == 'TIGERDataModule':
     dataset.trainer = FakeTrainer()
     transform = transforms.ToDevice(device)  # z-std already done within dataset
     inferer = inferers.SlidingWindowInferer(param['Args/fit.data.init_args.spatial_size'], 1,
-                                           mode='gaussian' ,padding_mode='reflect', device='cpu')
+                                            mode='gaussian', padding_mode='reflect', device='cpu')
     mask_background = True
 elif dataset_name == 'SegGrazPedWriDataModule':
     dataset = get_class_from_path(dataset_class)(32, False)
@@ -80,6 +88,7 @@ else:
 dataset.setup('test')
 
 dsc_metric = metrics.DiceMetric(not model.has_background, "none", num_classes=model.n_classes)
+hdd_metric = metrics.HausdorffDistanceMetric(not model.has_background, percentile=95, reduction="none")
 
 dsc_values = []
 with torch.inference_mode():
@@ -94,20 +103,32 @@ with torch.inference_mode():
         x = transform(x)
         y_hat = inferer(x, model)
         y_hat = y_hat.argmax(1, keepdim=True) if model.cls_mtl_exclude else y_hat.greater_equal(0)
+        y_hat = y_hat.cpu()
 
-        if mask_background: # Ground truth in TIGER does not always cover the whole image hence a lot of background
+        if mask_background:  # Ground truth in TIGER does not always cover the whole image hence a lot of background
             assert model.has_background and model.cls_mtl_exclude
             y_hat[y == 0] = 0
 
-        dsc_metric(y_hat.cpu(), y)
+        dsc_metric(y_hat, y)
+        if model.cls_mtl_exclude:
+            hdd_metric(to_one_hot(y_hat, model.n_classes), to_one_hot(y, model.n_classes))
+        else:
+            hdd_metric(y_hat, y)
 
 dsc_values = dsc_metric.aggregate()
-dsc_stats = torch.stack([dsc_values.nanmean(0), nanstd(dsc_values, 0)], 1)
-df = pd.DataFrame(dsc_stats, columns=['mean', 'std'])
+hdd_values = hdd_metric.aggregate()
+dsc_stats = torch.stack([dsc_values.nanmean(0), hdd_values.nanmean(0)], 1)
+df = pd.DataFrame(dsc_stats, columns=['Dice', 'Hausdorff 95%'])
 df['label'] = model.label
 df.set_index('label', inplace=True)
-df.loc['global'] = [dsc_values.nanmean().item(), dsc_values[~dsc_values.isnan()].std().item()]
+df.loc['global'] = [dsc_values.nanmean().item(), hdd_values.nanmean().item()]
 print('\n', task.name)
 print(df.to_string())
-print(round(dsc_values.nanmean().item(), 4), '±', round(dsc_values[~dsc_values.isnan()].std().item(), 4))
-print(task.name)
+print(str(round(dsc_values.nanmean().item(), 4)) + ',', round(hdd_values.nanmean().item(), 4))
+
+try:
+    kernel_size = param['Args/fit.model.init_args.kernel_size']
+except KeyError:
+    kernel_size = param['Args/fit.model.init_args.conv_kernel']
+
+print(task.name, kernel_size)
