@@ -203,7 +203,7 @@ Using of pretrained MetaFormer (PPAA). Reuse attention weights for local self at
 |               | 5           | 0.9465, 8.094  | 0.7957, 9.055   |                                    |
 |               | 7           | 0.9449, 7.1625 | 0.7927, 9.1572  |                                    |
 |               | 9           | -              | -               |                                    |
-| fullAttn      | –           | 0.9443, 7.5997 | 0.7562, 20.5518 | not runnable → 81 VRAM model alone |
+| fullAttn      | -           | 0.9443, 7.5997 | 0.7562, 20.5518 | not runnable → 81 VRAM model alone |
 | identity      | -           | 0.9458, 7.7736 | 0.7417, 19.0719 | 0.5358, 535.9729                   |
 | UNet          | 3           | 0.9552, 5.1958 | 0.8478, 13.1739 | 0.5666, 565.8803                   |
 |               | 5           | 0.9499, 6.9125 | 0.8258, 16.4765 | 0.5458, 551.4406                   |
