@@ -99,15 +99,15 @@ class PretrainedMetaformer(ClassifierBase):
                     blocks[l].token_mixer = nn.Identity()
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
-        # self.model = torch.compile(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
+            state = 'finetuned' if self.hparams.pretrained else 'scratch'
             Task.current_task().set_name(
-                f'metaformer_{self.hparams.tokenmixer}_finetuned_{self.hparams.ds_name} {self.hparams.kernel_size}²')
+                f'PPTT_{self.hparams.tokenmixer}_{state}_{self.hparams.ds_name} {self.hparams.kernel_size}²')
 
 
 if __name__ == '__main__':
