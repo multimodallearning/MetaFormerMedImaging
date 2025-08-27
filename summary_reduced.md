@@ -113,7 +113,7 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 | chestmnist       | 0.9307, 0.785, 0.1989  | multilabel with bad f1              |                            |
 | pathmnist        | 0.8701, 0.9791, 0.8677 | good                                | color, pathology, r-invar  |
 
-## MetaFormer from scratch
+## MetaFormer [T, T, T, T] from scratch
 
 | Token Mixer | Kernel Size | ImageWoof              | PathMNIST                | DermaMNIST               | PneumoniaMNIST           | OrganSMNIST            |
 |-------------|-------------|------------------------|--------------------------|--------------------------|--------------------------|------------------------|
@@ -139,9 +139,32 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 (#) even with reduced lr, training was instable -> disabled compilation, used half batch size and grad accumulation of 2
 (+) reduced batch size by factor 4 and use grad accumulation of 4
 
-## Pretrained MetaFormer
+## MetaFormer [P, P, T, T]
 
-Using of pretrained MetaFormer (PPAA). Reuse attention weights for local self attention.
+| Token Mixer           | Kernel Size | ImageWoof              | PathMNIST            | DermaMNIST             | PneumoniaMNIST        | OrganSMNIST           |
+|-----------------------|-------------|------------------------|----------------------|------------------------|-----------------------|-----------------------|
+| pooling               | 3           |                        |                      |                        |                       |                       |
+|                       | 5           |                        |                      |                        |                       |                       |
+|                       | 7           |                        |                      |                        |                       |                       |
+| conv                  | 3           |                        |                      |                        |                       |                       |
+|                       | 5           |                        |                      |                        |                       |                       |
+|                       | 7           |                        |                      |                        |                       |                       |
+| sep_conv              | 3           |                        |                      |                        |                       |                       |
+|                       | 5           |                        |                      |                        |                       |                       |
+|                       | 7           |                        |                      |                        |                       |                       |
+| locAttn               | 3           |                        |                      |                        |                       |                       |
+|                       | 5           |                        |                      |                        |                       |                       |
+|                       | 7           |                        |                      |                        |                       |                       |
+| locAttn (warm start)  | 3           |                        |                      |                        |                       |                       |
+|                       | 5           |                        |                      |                        |                       |                       |
+|                       | 7           |                        |                      |                        |                       |                       |
+| fullAttn              | -           |                        |                      |                        |                       |                       |
+| fullAttn (warm start) | -           |                        |                      |                        |                       |                       |
+| identity              | 1           |                        |                      |                        |                       |                       |
+
+### Pretrained
+
+warm start = Reuse attention weights for self attention.
 
 | Token Mixer           | Kernel Size | ImageWoof              | PathMNIST              | DermaMNIST             | PneumoniaMNIST         | OrganSMNIST            |
 |-----------------------|-------------|------------------------|------------------------|------------------------|------------------------|------------------------|
