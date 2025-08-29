@@ -140,6 +140,7 @@ Train ResNet18 from scratch for max(500 epochs, 35k iter) w/o lr scheduler
 (+) reduced batch size by factor 4 and use grad accumulation of 4
 
 ## MetaFormer [P, P, T, T]
+### From Scratch
 
 | Token Mixer | Kernel Size | ImageWoof              | PathMNIST              | DermaMNIST             | PneumoniaMNIST         | OrganSMNIST            |
 |-------------|-------------|------------------------|------------------------|------------------------|------------------------|------------------------|
