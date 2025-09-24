@@ -35,7 +35,7 @@ class ImageWoofDataset(Dataset):
         assert img_size <= 320, "Used version of Imagewoof provides only resolutions up to 320x320"
         assert mode in ["train", "val"], "mode must be either 'train' or 'val'"
         dir = Path('data/imagewoof2-320') / mode
-        available_files = list(dir.rglob('*.JPEG'))
+        available_files = sorted(list(dir.rglob('*.JPEG')))
         self.data = []
         transform = transforms.Compose([
             SquarePad(),

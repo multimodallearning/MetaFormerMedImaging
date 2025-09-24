@@ -62,7 +62,7 @@ class SegGrazPedWriDataset(Dataset):
         img_path = Path('data/img_only_front_all_left')
         self.available_file_names = set([f.stem for f in img_path.glob('*.png')])
         self.available_file_names &= set(self.gt_parser.available_file_names)
-        self.available_file_names = list(self.available_file_names) # __getitem__ likes to use indices
+        self.available_file_names = sorted(list(self.available_file_names)) # __getitem__ likes to use indices
         self.data = dict()
         for file_name in tqdm(self.available_file_names, unit='img', desc=f'Loading data for {mode}'):
             data_dict = dict()

@@ -38,12 +38,12 @@ class TIGERDataModule(LightningDataModule):
         train_data = (base / 'imagesTr').glob('*.png')
         train_data = [
             {'image': str(img_path), 'label': str(base / 'labelsTr' / img_path.name)}
-            for img_path in train_data
+            for img_path in sorted(list(train_data))
         ]
         test_data = (base / 'imagesTs').glob('*.png')
         test_data = [
             {'image': str(img_path), 'label': str(base / 'labelsTs' / img_path.name)}
-            for img_path in test_data
+            for img_path in sorted(list(test_data))
         ]
 
         if stage == 'fit':
