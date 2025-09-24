@@ -8,6 +8,7 @@ from clearml import Task
 from monai import transforms, inferers, metrics
 from tqdm import tqdm
 from torch.nn.functional import one_hot
+from pathlib import Path
 
 
 @dataclass
@@ -90,7 +91,6 @@ dataset.setup('test')
 dsc_metric = metrics.DiceMetric(not model.has_background, "none", num_classes=model.n_classes)
 hdd_metric = metrics.HausdorffDistanceMetric(not model.has_background, percentile=95, reduction="none")
 
-dsc_values = []
 with torch.inference_mode():
     for sample in tqdm(dataset.test_dataloader(), desc='Predicting'):
         if isinstance(sample, (tuple, list)):
@@ -117,8 +117,8 @@ with torch.inference_mode():
 
 dsc_values = dsc_metric.aggregate()
 hdd_values = hdd_metric.aggregate()
-dsc_stats = torch.stack([dsc_values.nanmean(0), hdd_values.nanmean(0)], 1)
-df = pd.DataFrame(dsc_stats, columns=['Dice', 'Hausdorff 95%'])
+stats = torch.stack([dsc_values.nanmean(0), hdd_values.nanmean(0)], 1)
+df = pd.DataFrame(stats, columns=['Dice', 'Hausdorff 95%'])
 df['label'] = model.label
 df.set_index('label', inplace=True)
 df.loc['global'] = [dsc_values.nanmean().item(), hdd_values.nanmean().item()]
@@ -132,3 +132,9 @@ except KeyError:
     kernel_size = param['Args/fit.model.init_args.conv_kernel']
 
 print(task.name, kernel_size)
+
+# save instance DSC scores
+token_mixer = param['Args/fit.model.init_args.token_mixer']
+base_path = Path('./eval/dsc_scores') / dataset_name
+base_path.mkdir(parents=True, exist_ok=True)
+torch.save(dsc_values.nanmean(1), base_path / f'{token_mixer}_{kernel_size}.pth')

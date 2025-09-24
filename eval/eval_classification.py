@@ -5,9 +5,12 @@ from torchmetrics import classification, MetricCollection
 from tqdm import tqdm
 import pandas as pd
 import os
+from pathlib import Path
+from models.pretrained_metaformer_classifier import PretrainedMetaformer
+from models.metaformer_classifier import AdaptiveMetaformerClassifier
 import argparse
 
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def get_class_from_path(path: str):
@@ -21,7 +24,7 @@ parser.add_argument("task_id", type=str, help="ClearML task ID")
 
 task_id = parser.parse_args().task_id
 
-#task_id = "c3e820787a3d4b73b06859e6a47a763b"
+# task_id = "069a56cf54384c099762019b09ac32eb"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -60,6 +63,8 @@ metrics = MetricCollection({
             "auroc": classification.AUROC(**metrics_kwargs)
 })
 
+pred = []
+gt = []
 with torch.inference_mode():
     for x, y in tqdm(dataset.test_dataloader(), desc='Predicting'):
         x = (x.to(device) - mean) / std
@@ -69,6 +74,8 @@ with torch.inference_mode():
         else:
             y_hat = y_hat.sigmoid()
         metrics(y_hat.cpu(), y)
+        pred.append(y_hat)
+        gt.append(y)
 
 metrics_dict = metrics.compute()
 metrics_dict['label'] = model.label
@@ -79,3 +86,29 @@ print('\n', task.name)
 print(df.to_string())
 print(', '.join(map(lambda s:str(round(s, 4)), df.loc['mean', ['acc', 'auroc', 'f1']])))
 print(task.name, param['Args/fit.model.init_args.kernel_size'])#, param['Args/fit.model.init_args.pretrained'])
+
+# save prediction and ground truth for ranking
+pred = torch.cat(pred).cpu()
+gt = torch.cat(gt).cpu()
+assert len(pred) == len(gt), 'Number of predictions and ground truths do not align.'
+if isinstance(model, PretrainedMetaformer):
+    architecture_signature = "2P2T"
+    assert param['Args/fit.model.init_args.pretrained'], 'Ranking only for pretrained 2P2T'
+elif isinstance(model, AdaptiveMetaformerClassifier):
+    architecture_signature = "4T"
+else:
+    raise ValueError('Unknown model type')
+token_mixer = param['Args/fit.model.init_args.tokenmixer']
+kernel = str(param['Args/fit.model.init_args.kernel_size'])
+file_name = [architecture_signature, token_mixer, kernel]
+try:
+    param_start = 'warm' if param['Args/fit.model.init_args.attention_weights_warm_start'] else 'cold'
+    file_name.append(param_start)
+except KeyError:
+    pass
+file_name = '_'.join(file_name)
+
+base_path = Path('./eval/classification_predictions') / param['Args/fit.model.init_args.ds_name']
+base_path.mkdir(parents=True, exist_ok=True)
+torch.save(pred, base_path / (file_name + '.pth'))
+torch.save(gt, base_path / 'gt.pth')
