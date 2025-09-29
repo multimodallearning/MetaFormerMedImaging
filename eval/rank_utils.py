@@ -2,7 +2,7 @@
 import itertools
 
 import torch
-from scipy.stats import ranksums
+from scipy.stats import ranksums, wilcoxon
 
 
 def scores_better(tasks_metric: torch.Tensor, test_method:str, alpha: float = 0.05):
@@ -16,13 +16,17 @@ def scores_better(tasks_metric: torch.Tensor, test_method:str, alpha: float = 0.
     T, S = tasks_metric.shape
     better = torch.full((T, T), -1)
     for t_curr, t_comp in itertools.product(range(T), repeat=2):
-        if test_method == "ranksums":
+        if t_curr == t_comp: # skip test to itself
+            better[t_curr, t_comp] = 0
+            continue
+
+        if test_method == "ranksums": # when samples are independent by each other (e.g. different datasets)
             h, p = ranksums(tasks_metric[t_curr].numpy(), tasks_metric[t_comp].numpy())
             if h > 0 and p < alpha:  # sign of h and p-value
                 better[t_curr, t_comp] = 1
             else:
                 better[t_curr, t_comp] = 0
-        elif test_method == "CI-based":
+        elif test_method == "CI-based": # paired test when using bootstrapping (5000 repeats are recommended)
             diffs = tasks_metric[t_curr] - tasks_metric[t_comp]
             ci_low = torch.quantile(diffs, alpha/2)
             ci_high = torch.quantile(diffs, 1-alpha/2)
@@ -30,8 +34,15 @@ def scores_better(tasks_metric: torch.Tensor, test_method:str, alpha: float = 0.
                 better[t_curr, t_comp] = 1 if diffs.median() > 0 else 0 # and better
             else:
                 better[t_curr, t_comp] = 0  # non significant
+        elif test_method == "signed-rank": # paired test for small sample sizes
+            diffs = tasks_metric[t_curr] - tasks_metric[t_comp]
+            _, p = wilcoxon(diffs.numpy())
+            if diffs.median() > 0 and p < alpha:
+                better[t_curr, t_comp] = 1
+            else:
+                better[t_curr, t_comp] = 0
         else:
-            raise ValueError(f"Unknown test_method: {test_method}. Please select from [ranksums, CI-based]")
+            raise ValueError(f"Unknown test_method: {test_method}. Please select from [ranksums, CI-based, signed-rank]")
     assert (better != -1).all(), 'some comparisons have not been made'
     scores_task = better.sum(1)
     return scores_task
