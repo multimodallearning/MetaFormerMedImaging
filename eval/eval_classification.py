@@ -10,7 +10,7 @@ from models.pretrained_metaformer_classifier import PretrainedMetaformer
 from models.metaformer_classifier import AdaptiveMetaformerClassifier
 import argparse
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def get_class_from_path(path: str):
@@ -39,7 +39,7 @@ dataset_class = param['Args/fit.data.class_path']
 dataset_name = dataset_class.split('.')[-1]
 
 if dataset_name == 'ImageWoofDataModule':
-    dataset = get_class_from_path(dataset_class)(256, param['Args/fit.data.init_args.spatial_size'], False)
+    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.batch_size'], param['Args/fit.data.init_args.spatial_size'], False)
     mean = dataset.mean
     std = dataset.std
 elif dataset_name == 'MedMNISTDataModule':
