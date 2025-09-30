@@ -32,4 +32,6 @@ df_normalize['gmean'] = df_normalize[~df_normalize.index.str.endswith('_9')].app
 df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
 print(df_normalize.to_string())
 
-print(df_normalize.sort_values(by='TIGERDataModule', ascending=False).to_string())
+# save
+df.to_csv('eval/ranking_scores/seg_abs.csv', index_label='TokenMixer')
+df_normalize.to_csv('eval/ranking_scores/seg_relativ.csv', index_label='TokenMixer')
