@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 from torchmetrics.functional.classification import multiclass_auroc
 from tqdm import tqdm
+from scipy.stats import gmean
 
 from eval import rank_utils
 
@@ -63,6 +64,6 @@ print(df.to_string())
 df_normalize = pd.DataFrame.from_dict(df_normalize)
 df_normalize.insert(0, 'TokenMixer', tm_names)
 df_normalize.set_index('TokenMixer', inplace=True)
-df_normalize['mean'] = df_normalize.mean(1)
-df_normalize.sort_values(by='mean', ascending=False, inplace=True)
+df_normalize['gmean'] = df_normalize.aggregate(gmean, 1)
+df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
 print(df_normalize.to_string())

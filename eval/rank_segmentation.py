@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+from scipy.stats import gmean
 
 from eval import rank_utils
 
@@ -27,8 +28,8 @@ df = pd.DataFrame(df)
 print(df.to_string())
 
 df_normalize = pd.DataFrame(df_normalize)
-df_normalize['mean'] = df_normalize[~df_normalize.index.str.endswith('_9')].mean(1, skipna=True)
-df_normalize.sort_values(by='mean', ascending=False, inplace=True)
+df_normalize['gmean'] = df_normalize[~df_normalize.index.str.endswith('_9')].apply(lambda row: gmean(row.dropna()), 1)
+df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
 print(df_normalize.to_string())
 
 print(df_normalize.sort_values(by='TIGERDataModule', ascending=False).to_string())
