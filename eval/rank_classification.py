@@ -14,7 +14,7 @@ n_bootstraps = 5000
 parser = argparse.ArgumentParser("Evaluate experiment")
 parser.add_argument("--signature", type=str, help="Architecture signature to evaluate [4T, 2P2T].", default='4T',
                     required=False)
-signature = parser.parse_args().signature
+signature = parser.parse_args().signature.upper()
 print('Evaluating architecture signatur:', signature)
 
 # construct metric matrix
@@ -67,3 +67,7 @@ df_normalize.set_index('TokenMixer', inplace=True)
 df_normalize['gmean'] = df_normalize.aggregate(gmean, 1)
 df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
 print(df_normalize.to_string())
+
+# save
+df.to_csv(f'eval/ranking_scores/{signature}_abs.csv', index_label='TokenMixer')
+df_normalize.to_csv(f'eval/ranking_scores/{signature}_relativ.csv', index_label='TokenMixer')
