@@ -12,6 +12,13 @@ from models.classifier_base import ClassifierBase
 class PoolFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
                  drop_path: float = 0.1):
+        """
+        PoolFormer classifier. Architecture signature: [P, P, P, P] where P is the Pooling token mixer.
+        :param dataset_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param model_name: PoolFormer model to use (see architectures.poolformer.model_urls for available models)
+        :param pretrained: whether to use pretrained weights or not
+        :param drop_path: stochastic depth rate
+        """
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
@@ -47,6 +54,14 @@ class PoolFormerClassifier(ClassifierBase):
 class MetaFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'metaformer_ppaa_s12_224', pretrained: bool = True,
                  drop_path: float = 0.1):
+        """
+        MetaFormer classifier. Architecture signature: [P, P, GA, GA] where P is the Pooling token mixer and GA is the
+         global attention token mixer.
+        :param dataset_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param model_name: MetaFormer model to use (see architectures.metaformer.model_urls for available models)
+        :param pretrained: whether to use pretrained weights or not
+        :param drop_path: stochastic depth rate
+        """
         super().__init__(dataset_name)
         assert self.is_2d, "MetaFormer is only implemented for 2D datasets"
         assert model_name in mf.model_urls, f"Model {model_name} not found in {mf.model_urls.keys()}"
@@ -81,6 +96,23 @@ class FlexFormerClassifier(ClassifierBase):
                  use_slopes: bool = False,
                  rw_percentage: float = None, learn_pe: bool = False, rpl_patch_emb: bool = False,
                  use_cls_token: bool = False):
+        """
+        FlexFormer classifier using local self attention as token mixer.
+        Architecture signature: [LA, LA, LA, LA] where LA is the local attention token mixer.
+        :param ds_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param model_name: MetaFormer model to build on
+        :param pretrained: whether to use pretrained weights or not
+        :param kernel_size: kernel size for local attention
+        :param head_dim: number of channels per attention head
+        :param lr: learning rate to use
+        :param patch_size: spatial input size (H, W)
+        :param drop_path: stochastic depth rate
+        :param use_slopes: whether to modify attention scores based on relative positions in directed local self attention.
+        :param rw_percentage: Reset pretrained weights by adding its std as noise weighted by this scale factor [0-1]
+        :param learn_pe: whether to learn positional encodings or not
+        :param rpl_patch_emb: whether to replace conv with avg_pool patch embedding (i.e. no learnable projection)
+        :param use_cls_token: whether to use class token or not
+        """
         super().__init__(ds_name, lr=lr)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         self.model = FlexFormer(self.n_classes, self.n_channels, [patch_size] * 2, kernel_size, head_dim,

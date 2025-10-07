@@ -8,6 +8,9 @@ from random import uniform
 
 
 class nnUNetDataAugmentation3D:
+    """
+    Implementation of nnUNet style data augmentation for 3D images in PyTorch and Kornia.
+    """
     def __init__(self, allow_flip: bool = True):
         self.rot_da = K.RandomRotation3D(degrees=30, p=0.2)
         self.affine_da = K.RandomAffine3D(degrees=0, translate=(0,) * 3, scale=(0.7, 1.4), p=0.2)
@@ -124,6 +127,9 @@ class nnUNetDataAugmentation3D:
 
 
 class nnUNetDataAugmentation2D(nnUNetDataAugmentation3D):
+    """
+        Implementation of nnUNet style data augmentation for 2D images in PyTorch and Kornia.
+        """
     def __init__(self, allow_flip: bool = True):
         super().__init__(allow_flip)
         # overwrite spatial augmentation with 2D augmentations

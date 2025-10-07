@@ -12,6 +12,18 @@ from models.classifier_base import ClassifierBase
 class AdaptiveMetaformerClassifier(ClassifierBase):
     def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5, lr:float=0.001,
                  head_dim: int = 16, drop_path: float = 0.1, device: str = "cuda"):
+        """
+        MetaFormerS12 classifier with definable token mixer. Model always trained from scratch.
+        Architecture signature: [T, T, T, T] where T is the token mixer.
+        :param ds_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param tokenmixer: token mixer to use at every stage
+        :param patch_size: spatial input size (H, W)
+        :param kernel_size: kernel size for token mixer if applicable
+        :param lr: learning rate to use
+        :param head_dim: embedding dimension of each head for attention based token mixers
+        :param drop_path: stochastic depth rate
+        :param device: specify device for creating block masks if local attention is used (needed for block mask creation in flex attention
+        """
         super().__init__(ds_name, lr)
         self.save_hyperparameters()
         self.model = getattr(pf, "poolformer_s12")(pretrained=False)

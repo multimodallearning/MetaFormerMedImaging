@@ -8,6 +8,13 @@ from models.segmentator_base import SegmentatorBase
 
 class UNetSegmentator(SegmentatorBase):
     def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3):
+        """
+        Plain UNet for Segmentation. Stage channel numbers are inspired by corresponding MetaFormer sizes.
+        But it adds a stage with channel number following the previous pattern.
+        :param ds_name: dataset name has to be one of 'jsrt', 'wristbone', 'tiger'
+        :param size: Size inspired by corresponding MetaFormer sizes. Either 'S' or 'M'.
+        :param conv_kernel: kernel size for convolution and up-convolution layers.
+        """
         super().__init__(ds_name)
         size = size.upper()
         assert size in ['S', 'M']
@@ -43,6 +50,16 @@ class UNetSegmentator(SegmentatorBase):
 
 class UNetOnPatchEmbedding(SegmentatorBase):
     def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3, in_patch_size:int=7, in_stride:int=4, in_padding=2):
+        """
+        UNet applied at the same first patch embedding layer as in MetaFormer architectures to match its receptive field.
+        This time the number if stages is the same as in MetaFormer architectures.
+        :param ds_name: dataset name has to be one of 'jsrt', 'wristbone', 'tiger'
+        :param size: Size inspired by corresponding MetaFormer sizes. Either 'S' or 'M'.
+        :param conv_kernel: kernel size for convolution and up-convolution layers.
+        :param in_patch_size: kernel size for the first patch embedding layer.
+        :param in_stride: stride for the first patch embedding layer.
+        :param in_padding: padding for the first patch embedding layer.
+        """
         super().__init__(ds_name)
         size = size.upper()
         assert size in ['S', 'M']

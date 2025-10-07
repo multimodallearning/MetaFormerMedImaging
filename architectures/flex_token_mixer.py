@@ -18,13 +18,14 @@ class FlexTokenMixer(nn.Module):
     def __init__(self, num_channel: int, num_heads: int, block_mask=None, learn_pos_emb: bool = False,
                  use_slopes: bool = False, eps: float = 0.02, init_as_pooling: bool = False):
         """
-        FlexTokenMixer with local self-attention to replace AvgPool in PoolFormer. It is initialized to mimic AvgPool.
-        :param num_channel: input channel and output channel
-        :param num_heads: number of heads used in attention
-        :param block_mask: precomputed block mask for local attention
-        :param learn_pos_emb: if True, a two-layer MLP on normalized coordinates as learnable position embedding is used
-        :param use_slopes: whether to use slopes as relative positional encoding in local attention
-        :param eps: std of the normal distribution used to initialize weights
+        Local self-attention as token mixer.
+        :param num_channel: number of feature channels (not changed by token mixing)
+        :param num_heads: number of heads
+        :param block_mask: block mask for local attention. If None, global attention is used.
+        :param learn_pos_emb: whether to use learnable position encoding with two-layer MLP
+        :param use_slopes: whether to use slopes in directed local attention
+        :param eps: initialization variance for weights when init_as_pooling is True
+        :param init_as_pooling: initialize weights to mimic average pooling (see MetaFormer paper, Alg.1), else random initialization
         """
         super().__init__()
         self.num_heads = num_heads
@@ -59,12 +60,13 @@ class FlexTokenMixer(nn.Module):
 
     @staticmethod
     def near_zero_init(m: nn.Module, var: float):
+        """Random initialization by zero-mean Gaussian with small variance"""
         if isinstance(m, nn.Linear):
             nn.init.normal_(m.weight, 0, var)
             nn.init.constant_(m.bias, 0)
 
-    # adapted from nn.Linear.reset_parameters()
     def random_init(self) -> None:
+        """Random initialization of weights. Adapted from nn.Linear.reset_parameters()"""
         layers2init = ['in_proj_qk', 'in_proj_v', 'out_proj'] if self.init_as_pooling else ['in_proj_qkv', 'out_proj']
         for layer_name in layers2init:
             weights = getattr(self, f'{layer_name}_weights')
@@ -76,6 +78,12 @@ class FlexTokenMixer(nn.Module):
             init.uniform_(bias, -bound, bound)
 
     def forward(self, x: torch.Tensor, cls: torch.Tensor = None) -> torch.Tensor:
+        """
+        Forward pass of local self-attention token mixer.
+        :param x: Input
+        :param cls: optional, embedding class token like in ViT (B, C)
+        :return:
+        """
         B, C, H, W = x.shape
         x_ = x.flatten(start_dim=2).transpose(1, 2)  # (B, C, H, W) -> (B, N, C)
         if self.learn_pos_emb:
@@ -263,6 +271,15 @@ class FlexFormer(nn.Module):
     @staticmethod
     def generate_block_mask(num_heads: int, kernel: int, patch_size: torch.Tensor, device: str,
                             has_cls: bool = False) -> Any:
+        """
+        Generate block mask for local attention. Should be called only once for each stage.
+        :param num_heads: number of heads
+        :param kernel: kernel size. Currently only square kernels are supported
+        :param patch_size: Input size of the stage (H, W)
+        :param device: device to use. Has to be the same as the model, since the mask is compiled to this device
+        :param has_cls: whether the model uses a global class token
+        :return:
+        """
         kernel = torch.tensor([kernel, kernel], device=device)
         patch_size = patch_size.int().to(device)
 

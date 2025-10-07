@@ -13,6 +13,20 @@ class PretrainedMetaformer(ClassifierBase):
                  pretrained: bool = True, attention_weights_warm_start: bool = True,
                  head_dim: int = 16, model_name: str = "metaformer_ppaa_s12_224", drop_path: float = 0.1,
                  device: str = "cuda"):
+        """
+        MetaFormerS12 classifier with definable token mixer for the last two stages. Model can be fintuned from ImageNet.
+        Architecture signature: [P, P, T, T] where T is the token mixer and P is pooling.
+        :param ds_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param tokenmixer: token mixer to use in the last two stages
+        :param patch_size: spatial input size (H, W)
+        :param kernel_size: kernel size for token mixer at the last two stages if applicable
+        :param pretrained: whether to use pretrained weights or not
+        :param attention_weights_warm_start: whether to warm start attention weights when using local or full attention
+        :param head_dim: number of channels per head for attention based token mixers
+        :param model_name: MetaFormer model to build on. For attention_weights_warm_start=True, only 'metaformer_ppaa_s12_224' is supported
+        :param drop_path: stochastic depth rate
+        :param device: specify device for creating block masks if local attention is used (needed for block mask creation in flex attention
+        """
         super().__init__(ds_name)
         self.save_hyperparameters()
         assert model_name in mf.model_urls, f"Model {model_name} not found in {mf.model_urls.keys()}"

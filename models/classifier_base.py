@@ -23,6 +23,17 @@ warnings.filterwarnings("ignore", category=UserWarning)
 class ClassifierBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01, ce_label_smoothing: float = 0.1,
                  warmup_epochs: int = 5, min_lr: float = 1e-5, loss_weight_max: float = 10, use_scheduler:bool = True):
+        """
+        Base class for classification models on MedMNIST and ImageWoof datasets.
+        :param ds_name: name of the dataset. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param lr: learn rate used for training
+        :param wd: weight decay deployed in AdamW optimizer
+        :param ce_label_smoothing: label smoothing in cross entropy loss
+        :param warmup_epochs: epochs for linear learning rate ramp-up
+        :param min_lr: minimum learning rate
+        :param loss_weight_max: clamp maximum for loss class weights
+        :param use_scheduler: whether to use cosine lr scheduler or no scheduler
+        """
         super().__init__()
         # attributes
         self.is_2d = False
@@ -98,6 +109,12 @@ class ClassifierBase(LightningModule):
     @staticmethod
     @torch.no_grad()
     def reset_pretrained_weights(model: nn.Module, scale: float) -> None:
+        """
+        Reset pretrained weights by adding noise with standard deviation of clamped weights * scale.
+        :param model: module to reset pretrained weights
+        :param scale: percentage of noise to add
+        :return:
+        """
         if scale is None or scale == 0:
             return
 

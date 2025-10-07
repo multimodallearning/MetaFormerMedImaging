@@ -12,6 +12,14 @@ from timm.models import adapt_input_conv
 class CNNClassifier(ClassifierBase):
     def __init__(self, ds_name: str, model: str = 'resnet18', pretrained: bool = False, kernel_size: int = 3,
                  use_scheduler: bool = True):
+        """
+        Wrapper for CNN classification models from timm library.
+        :param ds_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param model: model name from timm library
+        :param pretrained: whether to use pretrained weights or not
+        :param kernel_size: deployed kernel size in conv layers.
+        :param use_scheduler: whether to use cosine lr scheduler or no scheduler
+        """
         super().__init__(ds_name, use_scheduler=use_scheduler)
         self.model_name = model
         self.ds_name = ds_name
@@ -45,7 +53,17 @@ class CNNClassifier(ClassifierBase):
 
 class ConvFormerClassifier(ClassifierBase):
     def __init__(self, dataset_name: str, model_name: str = 'poolformer_s12', pretrained: bool = True,
-                 kernel: int = 3, depthwise: bool = True, drop_path: float = 0.1, rw_percentage: float = 0.4):
+                 kernel: int = 3, depthwise: bool = True, drop_path: float = 0.1, rw_percentage: float = None):
+        """
+        MetaFormer classifier with convolutions as token mixer.
+        :param dataset_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
+        :param model_name: MetaFormer model to build on
+        :param pretrained: whether to use pretrained weights or not
+        :param kernel: kernel size deployed in conv layers.
+        :param depthwise: whether to use depthwise conv or not
+        :param drop_path: stochastic depth rate
+        :param rw_percentage: Reset pretrained weights by adding its std as noise weighted by this scale factor [0-1]
+        """
         super().__init__(dataset_name)
         assert self.is_2d, "PoolFormer is only implemented for 2D datasets"
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"

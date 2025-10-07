@@ -1,3 +1,6 @@
+# functions to modify attention scores based on relative positions in directed local self attention.
+# The input resolutions have to be hardcoded hence the wrapper function
+
 def slopes_4_neighbours(score, b, h, q_idx, kv_idx, W):
     # unravel index
     q_x = q_idx % W

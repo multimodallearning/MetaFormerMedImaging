@@ -15,6 +15,11 @@ LBL_CNT = torch.tensor(
 
 class TIGERDataModule(LightningDataModule):
     def __init__(self, batch_size: int = 8, spatial_size: int = 768):
+        """
+        Dataset from the TIGER challenge by grand-challenge.org
+        :param batch_size: batch size to use
+        :param spatial_size: patch size extracted from whole slide images
+        """
         super().__init__()
         assert batch_size % 4 == 0, 'Batch size must be divisible by 4, because we extract four equal space patches for validation.'
         self.batch_size = batch_size

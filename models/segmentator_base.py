@@ -21,6 +21,14 @@ warnings.filterwarnings("ignore", category=UserWarning)
 class SegmentatorBase(LightningModule):
     def __init__(self, ds_name: str, lr: float = 0.001, wd: float = 0.01,
                  warmup_epochs: int = 5, min_lr: float = 1e-5):
+        """
+        Base class for segmentation models on JSRT, WristBone and Tiger datasets. Deploying a cosine lr scheduler with single cycle.
+        :param ds_name: which dataset to use. One of 'jsrt', 'wristbone', 'tiger'
+        :param lr: learn rate used for training
+        :param wd: weight decay deployed in AdamW optimizer
+        :param warmup_epochs: number of epochs for linear learning rate ramp-up
+        :param min_lr: minimum learning rate
+        """
         super().__init__()
         # attributes
         self.has_background = False

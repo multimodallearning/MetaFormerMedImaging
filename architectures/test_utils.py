@@ -1,3 +1,5 @@
+# some tests for unravel functions used in generate_block_mask in flex_token_mixer
+
 from unittest import TestCase
 import torch
 from utils import unravel_index, unravel_index_2d, unravel_index_3d

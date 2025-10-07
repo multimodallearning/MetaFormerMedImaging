@@ -9,8 +9,8 @@ def scores_better(tasks_metric: torch.Tensor, test_method:str, alpha: float = 0.
     """
 
     :param tasks_metric: token_mixer x n_test_scores
-    :param test_method: str Method used to calculate significance
-    :param alpha: significance level
+    :param test_method: str Method used to test for significance
+    :param alpha: level
     :return:
     """
     T, S = tasks_metric.shape

@@ -14,6 +14,21 @@ class MetaFormerSegmentator(SegmentatorBase):
     def __init__(self, ds_name: str, token_mixer:str, model_name: str = 'poolformer_s12', pretrained: bool = False, kernel_size: int = 5,
                  head_dim: int = 16, lr: float = 1e-3, drop_path: float = 0.1, use_slopes: bool = False,
                  learn_pe: bool = False, decoder_latent_dim:int=256, patch_size:int=None):
+        """
+        Segmentation model with SegFormer decoder and MetaFormer encoder with definable token mixer.
+        :param ds_name: dataset name. has to be jsrt, wristbone or tiger
+        :param token_mixer: token mixer to deploy at each stage of MetaFormer encoder
+        :param model_name: MetaFormer model to build the encoder on
+        :param pretrained: whether to use pretrained weights or not
+        :param kernel_size: used kernel size for token mixer in encoder if applicable
+        :param head_dim: number of channels per head for attention based token mixers
+        :param lr: learning rate to use
+        :param drop_path: stochastic depth rate
+        :param use_slopes: whether to modify attention scores based on relative positions in directed local self attention.
+        :param learn_pe: whether to learn positional embeddings at the beginning of each stage when using attention-based token mixers
+        :param decoder_latent_dim: hidden dimension in SegFormer decoder
+        :param patch_size: spatial input size (H, W). If None, use default sizes for each dataset.
+        """
         super().__init__(ds_name, lr=lr)
         assert model_name in pf.model_urls, f"Model {model_name} not found in {pf.model_urls.keys()}"
         self.encoder = getattr(pf, model_name)(pretrained=pretrained)
