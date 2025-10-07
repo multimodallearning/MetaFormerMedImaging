@@ -174,8 +174,7 @@ obtain the 8-bit images.
 After this, please use the lateral code provided in the `dataset.csv` (downloaded from the same source as the images)
 and flip all "right hand" images to show a "left hand" and hence create a homogeneous dataset.
 
-For this dataset, we provide the segmentation masks (`dataset/data/graz/raw_segmentations_no_cast.h5`) for 17 bones on
-63 images.
+For this dataset, we provide the segmentation masks for 17 bones of 63 images.
 The masks are encoded within the xml files in `/data/cvat_annotation_xml` and automatically parsed when instantiating
 the `SegGrazPedWriDataModule`.
 
