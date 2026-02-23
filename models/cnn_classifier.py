@@ -1,6 +1,6 @@
 import timm
 from clearml import Task
-from timm.models.resnet import ResNet
+import timm_3d
 
 from models.classifier_base import ClassifierBase
 from architectures import poolformer as pf
@@ -27,19 +27,22 @@ class CNNClassifier(ClassifierBase):
             self.model = timm.create_model(model, pretrained=pretrained, num_classes=self.n_classes,
                                            in_chans=self.n_channels)
         elif self.is_3d:
-            raise NotImplementedError("3D models not implemented yet")
+            self.model = timm_3d.create_model(model, pretrained=pretrained, num_classes=self.n_classes,
+                                              in_chans=self.n_channels)
 
         if kernel_size != 3:
-            assert isinstance(self.model, ResNet), "Only ResNet models support kernel size adaptation"
+            assert isinstance(self.model, (timm.models.ResNet, timm_3d.models.ResNet)),\
+                "Only ResNet models support kernel size adaptation"
+            conv = nn.Conv2d if isinstance(self.model, timm.models.ResNet) else nn.Conv3d
             for i in range(1, 5):
                 seq = getattr(self.model, f'layer{i}')
                 for j in range(len(seq)):
-                    seq[j].conv1 = nn.Conv2d(seq[j].conv1.in_channels, seq[j].conv1.out_channels, kernel_size=kernel_size,
+                    seq[j].conv1 = conv(seq[j].conv1.in_channels, seq[j].conv1.out_channels, kernel_size=kernel_size,
                                              stride=seq[j].conv1.stride, padding=kernel_size // 2, bias=False)
-                    seq[j].conv2 = nn.Conv2d(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel_size,
+                    seq[j].conv2 = conv(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel_size,
                                              stride=seq[j].conv2.stride, padding=kernel_size // 2, bias=False)
 
-        self.save_hyperparameters()
+            self.save_hyperparameters()
 
     def forward(self, x):
         return self.model(x)
@@ -106,9 +109,9 @@ class ConvFormerClassifier(ClassifierBase):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    m = CNNClassifier('imagewoof', kernel_size=7)
+    m = CNNClassifier('NoduleMNIST3D', kernel_size=7)
     print(m)
-    x = torch.randn(8, 3, 224, 224)
+    x = torch.randn(8, 1, 64, 64, 64)
     y_hat = m(x)
-    summary(m, (8, 3, 224, 224))
+    summary(m, x.shape)
     print(y_hat.shape)
