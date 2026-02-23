@@ -5,10 +5,10 @@ import torch
 def list_print(x:torch.Tensor, dec:int=5):
     return [round(e, dec) for e in x.tolist()]
 
-ds_name = 'ChestMNIST'
+ds_name = 'NoduleMNIST3D'
 
 DataClass = getattr(medmnist, medmnist.INFO[ds_name.lower()]['python_class'])
-ds_kwargs = {'root': './data', 'download': True, 'size': 224}
+ds_kwargs = {'root': './data', 'download': True, 'size': 64 if ds_name.endswith("3D") else 224}
 ds = DataClass('train', **ds_kwargs)
 imgs = torch.from_numpy(ds.imgs)
 
@@ -20,7 +20,8 @@ pixel_cnt = torch.zeros(n_channels)
 sum = torch.zeros(n_channels)
 sum_squared = torch.zeros(n_channels)
 for batch in tqdm(torch.tensor_split(imgs, len(ds) // 512)):
-    batch = batch.float().div(255).permute(3, 0, 1, 2).flatten(1)
+    batch = batch.float().div(255)
+    batch = torch.movedim(batch, -1, 0).flatten(1)
 
     pixel_cnt += batch[0].numel()
     sum += batch.sum(-1)

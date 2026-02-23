@@ -38,7 +38,7 @@ class ClassifierBase(LightningModule):
         # attributes
         self.is_2d = False
         self.is_3d = False
-        if ds_name.lower().endswith("mnist"):
+        if ds_name.lower().endswith(("mnist", "mnist3d")):
             self.n_channels = INFO[ds_name.lower()]['n_channels']
             self.label = list(INFO[ds_name.lower()]['label'].values())
             self.n_classes = len(self.label)

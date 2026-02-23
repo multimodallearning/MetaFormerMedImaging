@@ -38,17 +38,20 @@ class RndAffineAug(torch.nn.Module):
 
 
 class MedMNISTDataModule(LightningDataModule):
-    def __init__(self, ds_name: str, batch_size: int = 128, spatial_size: int = 224, data_aug: str = 'affine',
-                 data_aug_std: float = 0.1):
+    def __init__(self, ds_name: str, batch_size: int = 128, spatial_size: tuple[int, str] = 'highest',
+                 data_aug: str = 'affine', data_aug_std: float = 0.1):
         """
         :param ds_name: name of the dataset. Has to be one of the MedMNIST datasets
         :param batch_size: batch size
-        :param spatial_size: spatial size of the images
+        :param spatial_size: spatial size of the images. If 'highest' will use the highest possible resolution
         :param data_aug: mode of data augmentation. [affine, nnUnet, None]
         :param data_aug_std: standard deviation of the random affine transformation
         """
         super().__init__()
-        self.spatial_size = spatial_size
+        if isinstance(spatial_size, str) and spatial_size == 'highest':
+            self.spatial_size = 64 if ds_name.lower().endswith('3d') else 224
+        else:
+            self.spatial_size = spatial_size
         self.dl_kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': torch.cuda.is_available()}
         self.DataClass = getattr(medmnist, medmnist.INFO[ds_name.lower()]['python_class'])
 
