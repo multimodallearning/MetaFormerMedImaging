@@ -11,6 +11,7 @@ from models.cnn_classifier import CNNClassifier, ConvFormerClassifier
 from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier, MetaFormerClassifier
 from models.pretrained_metaformer_classifier import PretrainedMetaformer
 from models.metaformer_classifier import AdaptiveMetaformerClassifier
+from models.metaformer_classifier_3d import AdaptiveMetaformerClassifier3D
 from datasets.med_mnist_dataset import MedMNISTDataModule
 from datasets.imagewoof_dataset import ImageWoofDataModule
 

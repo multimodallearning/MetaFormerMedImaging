@@ -39,6 +39,19 @@ def get_parent_module(model, module_name):
         parent = getattr(parent, p)
     return parent, parts[-1]
 
+class Pooling3D(nn.Module):
+    """
+    Implementation of pooling for PoolFormer
+    --pool_size: pooling size
+    """
+    def __init__(self, pool_size=3, **kwargs):
+        super().__init__()
+        self.pool = nn.AvgPool3d(
+            pool_size, stride=1, padding=pool_size//2, count_include_pad=False)
+
+    def forward(self, x):
+        return self.pool(x) - x
+
 
 class AdaptiveMetaformerClassifier3D(ClassifierBase):
     def __init__(self, ds_name, tokenmixer: str, patch_size: int = 64, kernel_size: int = 5, lr: float = 0.001,
@@ -74,7 +87,7 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
         for module in filter(lambda m: isinstance(m, pf.Mlp), self.model.modules()):
             module.apply(self._init_weights)
 
-        patch_size = torch.tensor([patch_size] * 2)
+        patch_size = torch.tensor([patch_size] * 3)
         embed_dim = self.model.patch_embed.proj.out_channels
         for i, blocks in enumerate(filter(lambda m: isinstance(m, nn.Sequential), self.model.network)):
             if drop_path > 0.:
@@ -88,8 +101,8 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
             if tokenmixer == 'loc_attn':
                 assert head_dim >= 16, f"head_dim should be at least 16 for local attention, but is {head_dim}"
                 num_heads = stage_embed_dim // head_dim
-                if stage_patch_size.prod() > 64:  # apply local self attention only when it is worth it
-                    block_mask = FlexFormer.generate_block_mask(num_heads, kernel_size, stage_patch_size, device)
+                if stage_patch_size.prod() >= 64:  # apply local self attention only when it is worth it
+                    block_mask = FlexFormer.generate_block_mask3D(num_heads, kernel_size, stage_patch_size, device)
                 else:
                     block_mask = None  # apply global self attention
                 for l in range(len(blocks)):
@@ -107,17 +120,23 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
                     else:
                         blocks[l].token_mixer = mf.Attention(num_channel, head_dim)
             elif tokenmixer == 'pooling':
+                kernel_larger_patch_size = torch.any(kernel_size > stage_patch_size).item()
+                if kernel_larger_patch_size:
+                    print(f'Kernel ({kernel_size}) is larger then patch size ({stage_patch_size.tolist()}), replacing AvgPool with identity.')
                 for l in range(len(blocks)):
-                    blocks[l].token_mixer = mf.Pooling(pool_size=kernel_size)
+                    if not kernel_larger_patch_size:
+                        blocks[l].token_mixer = Pooling3D(pool_size=kernel_size)
+                    else:
+                        blocks[l].token_mixer = nn.Identity()
             elif tokenmixer == 'conv':
                 for l in range(len(blocks)):
                     num_channel = blocks[l].norm1.num_channels
-                    blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
+                    blocks[l].token_mixer = nn.Conv3d(num_channel, num_channel, kernel_size=kernel_size,
                                                       stride=1, padding=kernel_size // 2, groups=1)
             elif tokenmixer == 'sep_conv':
                 for l in range(len(blocks)):
                     num_channel = blocks[l].norm1.num_channels
-                    blocks[l].token_mixer = nn.Conv2d(num_channel, num_channel, kernel_size=kernel_size,
+                    blocks[l].token_mixer = nn.Conv3d(num_channel, num_channel, kernel_size=kernel_size,
                                                       stride=1, padding=kernel_size // 2, groups=num_channel)
             elif tokenmixer == 'identity':
                 for l in range(len(blocks)):
@@ -142,16 +161,15 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
 
 
 if __name__ == '__main__':
-    # import os
-    #
-    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    import os
 
-    for mixer_name in ['full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:  # 'loc_attn',
-        m = AdaptiveMetaformerClassifier3D('NoduleMNIST3D', 'identity')  # .cuda()
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:
+        m = AdaptiveMetaformerClassifier3D('NoduleMNIST3D', mixer_name, patch_size=64).cuda()
         print('\n', mixer_name)
         # print(m)
-        x = torch.randn(2, 1, 64, 64, 64)  # .cuda()
+        x = torch.randn(2, 1, 64, 64, 64).cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')
-        break

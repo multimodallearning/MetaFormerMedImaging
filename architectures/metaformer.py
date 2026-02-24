@@ -16,18 +16,17 @@
 """
 MetaFormer implementation with hybrid stages
 """
-from typing import Sequence
 from functools import partial, reduce
+from typing import Sequence
+import math
+
 import torch
 import torch.nn as nn
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.layers import DropPath, trunc_normal_
 from timm.models.registry import register_model
 
-
 from .poolformer import PatchEmbed, LayerNormChannel, GroupNorm, Mlp
-
 
 
 def _cfg(url='', **kwargs):
@@ -94,9 +93,9 @@ class Attention(nn.Module):
 
     def forward(self, x):
         shape = x.shape
-        if len(shape) == 4:
-            B, C, H, W = shape
-            N = H * W
+        B, C = shape[:2]
+        if len(shape) != 3:
+            N = math.prod(shape[2:])
             x = torch.flatten(x, start_dim=2).transpose(-2, -1) # (B, N, C)
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
@@ -110,8 +109,8 @@ class Attention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        if len(shape) == 4:
-            x = x.transpose(-2, -1).reshape(B, C, H, W)
+        if len(shape) != 3:
+            x = x.transpose(-2, -1).reshape(B, C, *shape[2:])
 
         return x
 

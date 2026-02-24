@@ -104,10 +104,10 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:
-        m = AdaptiveMetaformerClassifier('OrganSMNIST', mixer_name).cuda()
+    for mixer_name in ['full_attn', 'pooling', 'conv', 'sep_conv', 'identity']: #'loc_attn',
+        m = AdaptiveMetaformerClassifier('OrganSMNIST', mixer_name)#.cuda()
         print('\n', mixer_name)
         # print(m)
-        x = torch.randn(2, 1, 224, 224).cuda()
+        x = torch.randn(2, 1, 224, 224)#.cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')

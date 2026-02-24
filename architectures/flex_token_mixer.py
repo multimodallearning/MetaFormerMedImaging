@@ -84,7 +84,6 @@ class FlexTokenMixer(nn.Module):
         :param cls: optional, embedding class token like in ViT (B, C)
         :return:
         """
-        B, C, H, W = x.shape
         x_ = x.flatten(start_dim=2).transpose(1, 2)  # (B, C, H, W) -> (B, N, C)
         if self.learn_pos_emb:
             pos_emb_projected = self.pos_emb_proj(self.pos_emb)
@@ -103,13 +102,13 @@ class FlexTokenMixer(nn.Module):
         v_ = self.view4heads(v, self.num_heads)
 
         y_ = flex_attention_compiled(q_, k_, v_, kernel_options=self.kernel_options, block_mask=self.block_mask, #)
-        score_mod=self.score_mod_fn)  # (B, M, H*W, C/M)
-        y_ = y_.transpose(1, 2).flatten(2)  # (B, M, H*W, C/M) -> (B, H*W, C)
+        score_mod=self.score_mod_fn)  # (B, M, N, C/M)
+        y_ = y_.transpose(1, 2).flatten(2)  # (B, M, N, C/M) -> (B, N, C)
         y_ = F.linear(y_, self.out_proj_weights, self.out_proj_bias)
         if cls is not None:
             cls = y_[:, 0, :]
             y_ = y_[:, 1:, :]  # remove class token
-        y = y_.transpose(1, 2).unflatten(2, (H, W))  # (B, N, C) -> (B, C, H, W)
+        y = y_.transpose(1, 2).unflatten(2, x.shape[2:])  # (B, N, C) -> (B, C, H, W, (D))
         if self.init_as_pooling:
             y -= x  # Subtract residual connection to mimic avgPool during initialization (see. MetaFormer paper Alg.1)
         return y if cls is None else (y, cls)
@@ -317,6 +316,42 @@ class FlexFormer(nn.Module):
             block_mask = create_block_mask(compute_mask_with_cls, None, num_heads, S + 1, S + 1, device, _compile=True)
         else:
             block_mask = create_block_mask(compute_mask, None, num_heads, S, S, device, _compile=True)
+        return block_mask
+
+    @staticmethod
+    def generate_block_mask3D(num_heads: int, kernel: int, patch_size: torch.Tensor, device: str) -> Any:
+        """
+        Generate block mask for local attention. Should be called only once for each stage.
+        :param num_heads: number of heads
+        :param kernel: kernel size. Currently only square kernels are supported
+        :param patch_size: Input size of the stage (H, W)
+        :param device: device to use. Has to be the same as the model, since the mask is compiled to this device
+        :return:
+        """
+        kernel = torch.tensor([kernel, kernel, kernel], device=device)
+        patch_size = patch_size.int().to(device)
+
+        def compute_mask(b, h, q_idx, kv_idx):
+            H, W, D = patch_size
+            # unravel indices
+            q_d = q_idx % D
+            q_w = (q_idx // D) % W
+            q_h = q_idx // (W * D)
+
+            kv_d = kv_idx % D
+            kv_w = (kv_idx // D) % W
+            kv_h = kv_idx // (W * D)
+
+            # local window check
+            valid_h = (q_h - kv_h).abs() <= kernel[0] // 2
+            valid_w = (q_w - kv_w).abs() <= kernel[1] // 2
+            valid_d = (q_d - kv_d).abs() <= kernel[2] // 2
+
+            return valid_h & valid_w & valid_d
+
+        S = patch_size.prod().item()
+        block_mask = create_block_mask(compute_mask, None, num_heads, S, S, device, _compile=True)
+
         return block_mask
 
 

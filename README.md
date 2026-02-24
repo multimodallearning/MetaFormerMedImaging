@@ -39,7 +39,8 @@ To select a token mixer `t`, please choose from the following options:
 - `conv`: convolution
 - `sep_conv`: grouped convolution
 - `identity`: no token mixing
-  When applicable, you can also define the kernel size k.
+
+When applicable, you can also define the kernel size `k`.
 
 #### Classification
 To train a classification model on our selection of four MedMNIST datasets for 35k iterations, use the following command sequence:

@@ -76,8 +76,8 @@ class MedMNISTDataModule(LightningDataModule):
         self.std = torch.tensor(img_stats.std).view(1, -1, 1, 1)
 
     def setup(self, stage: str = None):
-        ds_kwargs = {'root': './data', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
-        #ds_kwargs = {'root': '/data_rechenmagd01_1/keuth/MedMNIST', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
+        #ds_kwargs = {'root': './data', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
+        ds_kwargs = {'root': '/data_rechenmagd01_1/keuth/MedMNIST', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
         if stage == 'fit':
             self.train_dataset = self.DataClass('train', **ds_kwargs)
             self.val_dataset = self.DataClass('val', **ds_kwargs)
