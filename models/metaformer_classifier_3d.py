@@ -1,6 +1,6 @@
 import torch
 from clearml import Task
-from timm.models import adapt_input_conv
+from timm.models.layers import trunc_normal_
 from torch import nn
 
 from architectures import poolformer as pf
@@ -9,15 +9,46 @@ from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
 from models.classifier_base import ClassifierBase
 
 
-class AdaptiveMetaformerClassifier(ClassifierBase):
-    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5, lr:float=0.001,
+def convert_conv2d_to_conv3d(conv: nn.Conv2d, **kwargs) -> nn.Conv3d:
+    def collapse_tuple_to_int(t: tuple[int, ...]) -> int:
+        assert all([e == t[0] for e in t]), 'tuple contains different entries'
+        return t[0]
+
+    attr = dict(
+        in_channels=conv.in_channels,
+        out_channels=conv.out_channels,
+        kernel_size=collapse_tuple_to_int(conv.kernel_size),
+        stride=collapse_tuple_to_int(conv.stride),
+        padding=collapse_tuple_to_int(conv.padding),
+        dilation=collapse_tuple_to_int(conv.dilation),
+        groups=conv.groups,
+        bias=conv.bias is not None,
+        padding_mode=conv.padding_mode,
+        device=conv.weight.device,
+        dtype=conv.weight.dtype
+    )
+    attr.update(kwargs)
+    conv3d = nn.Conv3d(**attr)
+    return conv3d
+
+
+def get_parent_module(model, module_name):
+    parts = module_name.split(".")
+    parent = model
+    for p in parts[:-1]:
+        parent = getattr(parent, p)
+    return parent, parts[-1]
+
+
+class AdaptiveMetaformerClassifier3D(ClassifierBase):
+    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 64, kernel_size: int = 5, lr: float = 0.001,
                  head_dim: int = 16, drop_path: float = 0.1, device: str = "cuda"):
         """
         MetaFormerS12 classifier with definable token mixer. Model always trained from scratch.
         Architecture signature: [T, T, T, T] where T is the token mixer.
         :param ds_name: dataset name. Has to be one of the MedMNIST datasets or 'imagewoof'
         :param tokenmixer: token mixer to use at every stage
-        :param patch_size: spatial input size (H, W)
+        :param patch_size: spatial input size (H, W, D)
         :param kernel_size: kernel size for token mixer if applicable
         :param lr: learning rate to use
         :param head_dim: embedding dimension of each head for attention based token mixers
@@ -27,16 +58,21 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
         super().__init__(ds_name, lr)
         self.save_hyperparameters()
         self.model = getattr(pf, "poolformer_s12")(pretrained=False)
-        assert self.is_2d, 'You try to apply a 2D model to a 3D dataset.'
+        assert self.is_3d, 'You try to apply a 3D model to a 2D dataset.'
 
         # adjust model to current dataset
         if self.model.head.out_features != self.n_classes:
             print('Replacing classifier head for new numbers of classes.')
             self.model.head = nn.Linear(self.model.head.in_features, self.n_classes)
-        if self.n_channels != 3:
-            self.model.patch_embed.proj.weight = nn.Parameter(
-                adapt_input_conv(self.n_channels, self.model.patch_embed.proj.weight))
-            self.model.patch_embed.proj.in_channels = self.n_channels
+        # replace all convs with 3d ones
+        conv_moduls = [(name, module) for name, module in self.model.named_modules() if isinstance(module, nn.Conv2d)]
+        conv_moduls[0][1].in_channels = self.n_channels  # adapt channels to channels of images
+        for name, conv in conv_moduls:
+            parent, child_name = get_parent_module(self.model, name)
+            setattr(parent, child_name, convert_conv2d_to_conv3d(conv))
+        # reinit MLP convs like linear
+        for module in filter(lambda m: isinstance(m, pf.Mlp), self.model.modules()):
+            module.apply(self._init_weights)
 
         patch_size = torch.tensor([patch_size] * 2)
         embed_dim = self.model.patch_embed.proj.out_channels
@@ -95,19 +131,27 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
             Task.current_task().set_name(
-                f'metaformer_{self.hparams.tokenmixer}_{self.hparams.ds_name} {self.hparams.kernel_size}²')
+                f'metaformer_{self.hparams.tokenmixer}_{self.hparams.ds_name} {self.hparams.kernel_size}³')
+
+    @staticmethod
+    def _init_weights(m):
+        if isinstance(m, nn.Conv3d):
+            trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
 
 if __name__ == '__main__':
-    import os
+    # import os
+    #
+    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:
-        m = AdaptiveMetaformerClassifier('OrganSMNIST', mixer_name).cuda()
+    for mixer_name in ['full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:  # 'loc_attn',
+        m = AdaptiveMetaformerClassifier3D('NoduleMNIST3D', 'identity')  # .cuda()
         print('\n', mixer_name)
         # print(m)
-        x = torch.randn(2, 1, 224, 224).cuda()
+        x = torch.randn(2, 1, 64, 64, 64)  # .cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')
+        break
