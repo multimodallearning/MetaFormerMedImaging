@@ -42,7 +42,7 @@ class CNNClassifier(ClassifierBase):
                     seq[j].conv2 = conv(seq[j].conv2.in_channels, seq[j].conv2.out_channels, kernel_size=kernel_size,
                                              stride=seq[j].conv2.stride, padding=kernel_size // 2, bias=False)
 
-            self.save_hyperparameters()
+        self.save_hyperparameters()
 
     def forward(self, x):
         return self.model(x)
