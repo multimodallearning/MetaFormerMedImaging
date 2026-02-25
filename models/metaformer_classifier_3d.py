@@ -169,7 +169,7 @@ if __name__ == '__main__':
     for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:
         m = AdaptiveMetaformerClassifier3D('NoduleMNIST3D', mixer_name, patch_size=64).cuda()
         print('\n', mixer_name)
-        # print(m)
+        print(m)
         x = torch.randn(2, 1, 64, 64, 64).cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')

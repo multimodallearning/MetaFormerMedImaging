@@ -1,6 +1,5 @@
 import medmnist
 import torch
-from kornia.augmentation.auto import RandAugment
 from pytorch_lightning import LightningDataModule
 from torch.nn import functional as F
 from torchvision.transforms import ToTensor
@@ -32,13 +31,13 @@ class RndAffineAug(torch.nn.Module):
         id = torch.eye(3, 4, device=x.device).unsqueeze(0)
         rnd_offset = torch.randn(x.shape[0], 3, 4, device=x.device).mul(self.std)
         grid = F.affine_grid(id + rnd_offset, list(x.shape), align_corners=False)
-        x = F.grid_sample(x, grid, align_corners=False, mode='trilinear')
+        x = F.grid_sample(x, grid, align_corners=False, mode='bilinear')
 
         return x
 
 
 class MedMNISTDataModule(LightningDataModule):
-    def __init__(self, ds_name: str, batch_size: int = 128, spatial_size: tuple[int, str] = 'highest',
+    def __init__(self, ds_name: str, batch_size: int = 128, spatial_size: int | str = 'highest',
                  data_aug: str = 'affine', data_aug_std: float = 0.1):
         """
         :param ds_name: name of the dataset. Has to be one of the MedMNIST datasets
@@ -59,11 +58,13 @@ class MedMNISTDataModule(LightningDataModule):
         self.use_data_aug = data_aug is not None
         allow_flipping = ALLOW_FLIPPING[ds_name.lower()]
         if issubclass(self.DataClass, medmnist.dataset.MedMNIST2D):
+            self.transform_func = ToTensor()
             if data_aug == 'nnUnet':
                 self.data_aug = nnunet_data_aug.nnUNetDataAugmentation2D(allow_flipping)
             elif data_aug == 'affine':
                 self.data_aug = RndAffineAug(std=data_aug_std, dims=2)
         elif issubclass(self.DataClass, medmnist.dataset.MedMNIST3D):
+            self.transform_func = lambda t: torch.from_numpy(t).float()
             if data_aug == 'nnUnet':
                 self.data_aug = nnunet_data_aug.nnUNetDataAugmentation3D(allow_flipping)
             elif data_aug == 'affine':
@@ -76,8 +77,9 @@ class MedMNISTDataModule(LightningDataModule):
         self.std = torch.tensor(img_stats.std).view(1, -1, 1, 1)
 
     def setup(self, stage: str = None):
-        #ds_kwargs = {'root': './data', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
-        ds_kwargs = {'root': '/data_rechenmagd01_1/keuth/MedMNIST', 'download': True, 'size': self.spatial_size, 'transform': ToTensor()}
+        ds_kwargs = {'download': True, 'size': self.spatial_size, 'transform': self.transform_func,
+                     'root': '/data_rechenmagd01_1/keuth/MedMNIST' if torch.cuda.is_available() else './data'}
+
         if stage == 'fit':
             self.train_dataset = self.DataClass('train', **ds_kwargs)
             self.val_dataset = self.DataClass('val', **ds_kwargs)
@@ -108,7 +110,7 @@ class MedMNISTDataModule(LightningDataModule):
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
 
-    dm = MedMNISTDataModule('PneumoniaMNIST', batch_size=1, spatial_size=224)
+    dm = MedMNISTDataModule('OrganSMNIST', batch_size=1, spatial_size='highest')
     dm.setup('fit')
     print('Length of train dataset:', len(dm.train_dataset), 'Length of val dataset:', len(dm.val_dataset))
     dl = dm.train_dataloader()
