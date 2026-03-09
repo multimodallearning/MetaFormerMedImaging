@@ -1,5 +1,6 @@
-from shutil import rmtree
 import os
+from shutil import rmtree
+
 # Reduce VRAM usage by reducing fragmentation
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 #os.environ["TORCHDYNAMO_VERBOSE"] = "1"
@@ -7,10 +8,11 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
-from datasets.grazpedwri_dataset import SegGrazPedWriDataModule
-from datasets.jsrt_dataset import JSRTDataModule
-from models.poolformer_segmentor import MetaFormerSegmentator
-from models.unet import UNetSegmentator, UNetOnPatchEmbedding
+from datasets.grazpedwri_dataset import SegGrazPedWriDataModule # noqa
+from datasets.jsrt_dataset import JSRTDataModule # noqa
+from datasets.tiger_dataset import TIGERDataModule # noqa
+from models.poolformer_segmentor import MetaFormerSegmentator # noqa
+from models.unet import UNetSegmentator, UNetOnPatchEmbedding # noqa
 
 task = Task.init(project_name="FlexConv/Segmentation", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)

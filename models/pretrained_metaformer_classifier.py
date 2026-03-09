@@ -5,6 +5,7 @@ from torch import nn
 
 from architectures import metaformer as mf
 from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
+from architectures.random_token_mixer import RandomMixer
 from models.classifier_base import ClassifierBase
 
 
@@ -111,6 +112,9 @@ class PretrainedMetaformer(ClassifierBase):
             elif tokenmixer == 'identity':
                 for l in range(len(blocks)):
                     blocks[l].token_mixer = nn.Identity()
+            elif tokenmixer == 'random':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = RandomMixer(stage_patch_size.int().tolist())
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
 
@@ -125,10 +129,10 @@ class PretrainedMetaformer(ClassifierBase):
 
 
 if __name__ == '__main__':
-    for mixer_name in ['loc_attn', 'full_attn', 'pooling', 'conv']:
-        m = PretrainedMetaformer('imagewoof', mixer_name, freeze_pretrained=True).cuda()
-        print(m)
-        x = torch.randn(2, 3, 224, 224).cuda()
+    for mixer_name in ['random', 'full_attn', 'pooling', 'conv']: #'loc_attn',
+        m = PretrainedMetaformer('imagewoof', mixer_name)
+        #print(m)
+        x = torch.randn(2, 3, 224, 224)
         y = m(x)
-        print(f'Output shape: {y.shape}\n')
+        print(f'Output shape for {mixer_name}: {y.shape}\n')
         break

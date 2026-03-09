@@ -6,6 +6,7 @@ from torch import nn
 from architectures import poolformer as pf
 from architectures import metaformer as mf
 from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
+from architectures.random_token_mixer import RandomMixer
 from models.classifier_base import ClassifierBase
 
 
@@ -86,6 +87,9 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
             elif tokenmixer == 'identity':
                 for l in range(len(blocks)):
                     blocks[l].token_mixer = nn.Identity()
+            elif tokenmixer == 'random':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = RandomMixer(stage_patch_size.int().tolist())
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
 

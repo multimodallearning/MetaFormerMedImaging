@@ -2,6 +2,7 @@ import torch
 from clearml import Task
 from timm.models import adapt_input_conv
 
+from architectures.random_token_mixer import RandomMixer
 from models.segmentator_base import SegmentatorBase
 from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
 from architectures import poolformer as pf
@@ -50,7 +51,7 @@ class MetaFormerSegmentator(SegmentatorBase):
 
         if patch_size is None:
             try:
-                patch_size = {'wristbone': [384, 224], 'jsrt': [256, 256], 'tiger': [256, 256]}[ds_name.lower()]
+                patch_size = {'wristbone': [384, 224], 'jsrt': [256, 256], 'tiger': [768, 768]}[ds_name.lower()]
             except KeyError:
                 raise NotImplementedError(f'Dataset {ds_name} has not been added yet.')
         else:
@@ -105,6 +106,9 @@ class MetaFormerSegmentator(SegmentatorBase):
             elif token_mixer == 'identity':
                 for l in range(len(blocks)):
                     blocks[l].token_mixer = nn.Identity()
+            elif token_mixer == 'random':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = RandomMixer(stage_patch_size.int().tolist())
             else:
                 raise ValueError(f'Unknown tokenmixer {token_mixer}')
 
