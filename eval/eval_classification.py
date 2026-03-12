@@ -1,16 +1,15 @@
-from clearml import Task
+import argparse
 import importlib
+from pathlib import Path
+
+import pandas as pd
 import torch
+from clearml import Task
 from torchmetrics import classification, MetricCollection
 from tqdm import tqdm
-import pandas as pd
-import os
-from pathlib import Path
-from models.pretrained_metaformer_classifier import PretrainedMetaformer
-from models.metaformer_classifier import AdaptiveMetaformerClassifier
-import argparse
 
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+from models.metaformer_classifier import AdaptiveMetaformerClassifier
+from models.pretrained_metaformer_classifier import PretrainedMetaformer
 
 
 def get_class_from_path(path: str):
@@ -23,8 +22,6 @@ parser = argparse.ArgumentParser("Evaluate experiment")
 parser.add_argument("task_id", type=str, help="ClearML task ID")
 
 task_id = parser.parse_args().task_id
-
-# task_id = "069a56cf54384c099762019b09ac32eb"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -39,11 +36,13 @@ dataset_class = param['Args/fit.data.class_path']
 dataset_name = dataset_class.split('.')[-1]
 
 if dataset_name == 'ImageWoofDataModule':
-    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.batch_size'], param['Args/fit.data.init_args.spatial_size'], False)
+    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.batch_size'],
+                                                 param['Args/fit.data.init_args.spatial_size'], False)
     mean = dataset.mean
     std = dataset.std
 elif dataset_name == 'MedMNISTDataModule':
-    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.ds_name'], param['Args/fit.data.init_args.batch_size'],
+    dataset = get_class_from_path(dataset_class)(param['Args/fit.data.init_args.ds_name'],
+                                                 param['Args/fit.data.init_args.batch_size'],
                                                  param['Args/fit.data.init_args.spatial_size'], None)
     mean = dataset.mean
     std = dataset.std
@@ -54,13 +53,13 @@ mean = mean.to(device, non_blocking=True)
 std = std.to(device, non_blocking=True)
 
 metrics_kwargs = dict(num_classes=model.n_classes, num_labels=model.n_classes, average=None,
-                  task='multiclass' if model.cls_mtl_exclude else 'multilabel')
+                      task='multiclass' if model.cls_mtl_exclude else 'multilabel')
 metrics = MetricCollection({
-            "acc": classification.Accuracy(**metrics_kwargs),
-            "f1": classification.F1Score(**metrics_kwargs),
-            "prec": classification.Precision(**metrics_kwargs),
-            "rec": classification.Recall(**metrics_kwargs),
-            "auroc": classification.AUROC(**metrics_kwargs)
+    "acc": classification.Accuracy(**metrics_kwargs),
+    "f1": classification.F1Score(**metrics_kwargs),
+    "prec": classification.Precision(**metrics_kwargs),
+    "rec": classification.Recall(**metrics_kwargs),
+    "auroc": classification.AUROC(**metrics_kwargs)
 })
 
 pred = []
@@ -84,8 +83,8 @@ df.set_index('label', inplace=True)
 df = pd.concat([df, df.describe().loc[['mean', 'std']]])
 print('\n', task.name)
 print(df.to_string())
-print(', '.join(map(lambda s:str(round(s, 4)), df.loc['mean', ['acc', 'auroc', 'f1']])))
-print(task.name, param['Args/fit.model.init_args.kernel_size'])#, param['Args/fit.model.init_args.pretrained'])
+print(', '.join(map(lambda s: str(round(s, 4)), df.loc['mean', ['acc', 'auroc', 'f1']])))
+print(task.name, param['Args/fit.model.init_args.kernel_size'])  # , param['Args/fit.model.init_args.pretrained'])
 
 # save prediction and ground truth for ranking
 pred = torch.cat(pred).cpu()
@@ -93,7 +92,7 @@ gt = torch.cat(gt).cpu()
 assert len(pred) == len(gt), 'Number of predictions and ground truths do not align.'
 if isinstance(model, PretrainedMetaformer):
     architecture_signature = "2P2T"
-    assert param['Args/fit.model.init_args.pretrained'], 'Ranking only for pretrained 2P2T'
+    assert param['Args/fit.model.init_args.pretrained'], 'Ranking only for pretrained 2P2T. Skipping saving predictions.'
 elif isinstance(model, AdaptiveMetaformerClassifier):
     architecture_signature = "4T"
 else:

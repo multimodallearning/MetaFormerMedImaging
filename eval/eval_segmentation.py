@@ -1,14 +1,14 @@
 import argparse
 import importlib
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import torch
 from clearml import Task
 from monai import transforms, inferers, metrics
-from tqdm import tqdm
 from torch.nn.functional import one_hot
-from pathlib import Path
+from tqdm import tqdm
 
 
 @dataclass
@@ -48,7 +48,6 @@ parser = argparse.ArgumentParser("Evaluate experiment")
 parser.add_argument("task_id", type=str, help="ClearML task ID")
 
 task_id = parser.parse_args().task_id
-#task_id = "88ddd779315a4861a4e93aeac5fe5ccd"
 task = Task.get_task(task_id)
 param = task.get_parameters(cast=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
