@@ -7,13 +7,14 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from clearml import Task
 from pytorch_lightning.cli import LightningCLI
-from models.cnn_classifier import CNNClassifier, ConvFormerClassifier
-from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier, MetaFormerClassifier
-from models.pretrained_metaformer_classifier import PretrainedMetaformer
-from models.metaformer_classifier import AdaptiveMetaformerClassifier
-from models.metaformer_classifier_3d import AdaptiveMetaformerClassifier3D
-from datasets.med_mnist_dataset import MedMNISTDataModule
-from datasets.imagewoof_dataset import ImageWoofDataModule
+from models.cnn_classifier import CNNClassifier, ConvFormerClassifier # noqa
+from models.foundation_model import RadDinoClassifier # noqa
+from models.poolformer_classifier import PoolFormerClassifier, FlexFormerClassifier, MetaFormerClassifier # noqa
+from models.pretrained_metaformer_classifier import PretrainedMetaformer # noqa
+from models.metaformer_classifier import AdaptiveMetaformerClassifier # noqa
+from models.metaformer_classifier_3d import AdaptiveMetaformerClassifier3D # noqa
+from datasets.med_mnist_dataset import MedMNISTDataModule # noqa
+from datasets.imagewoof_dataset import ImageWoofDataModule # noqa
 
 task = Task.init(project_name="FlexConv/Classification", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)

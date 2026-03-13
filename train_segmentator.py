@@ -13,6 +13,7 @@ from datasets.jsrt_dataset import JSRTDataModule # noqa
 from datasets.tiger_dataset import TIGERDataModule # noqa
 from models.poolformer_segmentor import MetaFormerSegmentator # noqa
 from models.unet import UNetSegmentator, UNetOnPatchEmbedding # noqa
+from models.foundation_model import RadDinoSegmentator # noqa
 
 task = Task.init(project_name="FlexConv/Segmentation", auto_resource_monitoring=False, reuse_last_task_id=False,
                  auto_connect_frameworks=False)
