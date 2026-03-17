@@ -5,7 +5,7 @@ import torch
 def list_print(x:torch.Tensor, dec:int=5):
     return [round(e, dec) for e in x.tolist()]
 
-ds_name = 'NoduleMNIST3D'
+ds_name = 'OrganMNIST3D'
 
 DataClass = getattr(medmnist, medmnist.INFO[ds_name.lower()]['python_class'])
 ds_kwargs = {'root': './data', 'download': True, 'size': 64 if ds_name.endswith("3D") else 224}

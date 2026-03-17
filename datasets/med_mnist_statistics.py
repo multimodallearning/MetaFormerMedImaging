@@ -21,7 +21,10 @@ IMG_MEAN_STD: dict[str, ImgStats] = {
     'organamnist': ImgStats(mean=[0.46803], std=[0.28758]),
     'organcmnist': ImgStats(mean=[0.49419], std=[0.27756]),
     'organsmnist': ImgStats(mean=[0.49522], std=[0.2769]),
-    'nodulemnist3d': ImgStats(mean=[0.26745], std=[0.27127])
+    'nodulemnist3d': ImgStats(mean=[0.26745], std=[0.27127]),
+    'synapsemnist3d': ImgStats(mean=[0.50973], std=[0.23681]),
+    'fracturemnist3d': ImgStats(mean=[0.02485], std=[0.11808]),
+    'organmnist3d': ImgStats(mean=[0.50595], std=[0.27877])
 }
 
 LOSS_WEIGHTS = {
@@ -37,8 +40,11 @@ LOSS_WEIGHTS = {
     'organamnist': [1.7752, 2.10583, 2.13129, 2.04495, 1.24715, 1.27078, 1.0, 1.25413, 1.25254, 1.42606, 1.31567],
     'organcmnist': [1.61278, 2.19634, 2.2402, 2.23085, 1.65665, 1.59754, 1.0, 1.72628, 1.70931, 1.5955, 1.37822],
     'organsmnist': [1.73707, 2.34487, 2.37522, 2.1919, 1.7493, 1.75943, 1.0, 2.16212, 2.07697, 1.31474, 1.49205],
-    'nodulemnist3d': [1.0, 1.71039]}
-
+    'nodulemnist3d': [1.0, 1.71039],
+    'synapsemnist3d': [1.64803, 1.0],
+    'fracturemnist3d': [1.0, 1.1113, 1.66315],
+    'organmnist3d': [1.0, 1.0, 1.0, 1.12416, 1.11201, 1.10608, 1.69558, 1.71718, 1.71718, 1.0, 1.0]
+}
 
 ALLOW_FLIPPING = {
     'pathmnist': True,
@@ -52,7 +58,10 @@ ALLOW_FLIPPING = {
     'organamnist': False,
     'organcmnist': False,
     'organsmnist': False,
-    'nodulemnist3d': True
+    'nodulemnist3d': True,
+    'synapsemnist3d': True,
+    'fracturemnist3d': True,
+    'organmnist3d': True
 }
 
 assert IMG_MEAN_STD.keys() == LOSS_WEIGHTS.keys() == ALLOW_FLIPPING.keys(), \

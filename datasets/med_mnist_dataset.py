@@ -99,7 +99,8 @@ class MedMNISTDataModule(LightningDataModule):
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
         x, y = batch
-        if self.use_data_aug and self.trainer.training:
+        trainer = getattr(self, "trainer", None)
+        if self.use_data_aug and trainer and trainer.training:
             x = self.data_aug(x)
         self.mean = self.mean.to(x)
         self.std = self.std.to(x)
