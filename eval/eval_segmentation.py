@@ -1,6 +1,5 @@
 import argparse
 import importlib
-from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -9,11 +8,6 @@ from clearml import Task
 from monai import transforms, inferers, metrics
 from torch.nn.functional import one_hot
 from tqdm import tqdm
-
-
-@dataclass
-class FakeTrainer:
-    fast_dev_run: bool = False
 
 
 def nanstd(o, dim, keepdim=False):
@@ -73,7 +67,6 @@ if dataset_name == 'JSRTDataModule':
     inferer = inferers.SimpleInferer()
 elif dataset_name == 'TIGERDataModule':
     dataset = get_class_from_path(dataset_class)(8, param['Args/fit.data.init_args.spatial_size'])
-    dataset.trainer = FakeTrainer()
     transform = transforms.ToDevice(device)  # z-std already done within dataset
     inferer = inferers.SlidingWindowInferer(param['Args/fit.data.init_args.spatial_size'], 1,
                                             mode='gaussian', padding_mode='reflect', device='cpu')

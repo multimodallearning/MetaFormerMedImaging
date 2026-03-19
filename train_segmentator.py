@@ -11,8 +11,9 @@ from pytorch_lightning.cli import LightningCLI
 from datasets.grazpedwri_dataset import SegGrazPedWriDataModule # noqa
 from datasets.jsrt_dataset import JSRTDataModule # noqa
 from datasets.tiger_dataset import TIGERDataModule # noqa
+from datasets.abdomen_atlas_dataset import AbdomenAtlasDataModule # noqa
 from models.poolformer_segmentor import MetaFormerSegmentator # noqa
-from models.unet import UNetSegmentator, UNetOnPatchEmbedding # noqa
+from models.unet import UNetSegmentator, UNetSegmentator3D, UNetOnPatchEmbedding # noqa
 from models.foundation_model import RadDinoSegmentator # noqa
 
 task = Task.init(project_name="FlexConv/Segmentation", auto_resource_monitoring=False, reuse_last_task_id=False,

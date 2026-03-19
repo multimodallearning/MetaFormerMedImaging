@@ -7,13 +7,14 @@ from models.segmentator_base import SegmentatorBase
 
 
 class UNetSegmentator(SegmentatorBase):
-    def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3):
+    def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3, spatial_dim:int=2):
         """
         Plain UNet for Segmentation. Stage channel numbers are inspired by corresponding MetaFormer sizes.
         But it adds a stage with channel number following the previous pattern.
         :param ds_name: dataset name has to be one of 'jsrt', 'wristbone', 'tiger'
         :param size: Size inspired by corresponding MetaFormer sizes. Either 'S' or 'M'.
         :param conv_kernel: kernel size for convolution and up-convolution layers.
+        :param spatial_dim: the spatial dimensionality of the input
         """
         super().__init__(ds_name)
         size = size.upper()
@@ -26,7 +27,7 @@ class UNetSegmentator(SegmentatorBase):
             raise NotImplementedError(f"Size {size} is not implemented. Use 'S' or 'M'.")
 
         self.model = UNet(
-            spatial_dims=2,
+            spatial_dims=spatial_dim,
             kernel_size=conv_kernel,
             up_kernel_size=conv_kernel,
             in_channels=self.n_channels,
@@ -47,6 +48,10 @@ class UNetSegmentator(SegmentatorBase):
     def on_fit_start(self) -> None:
         if Task.current_task() is not None:
             Task.current_task().set_name(f'unet{self.hparams.size}_{self.hparams.ds_name}')
+
+class UNetSegmentator3D(UNetSegmentator):
+    def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3):
+        super().__init__(ds_name, size, conv_kernel, 3)
 
 class UNetOnPatchEmbedding(SegmentatorBase):
     def __init__(self, ds_name: str, size:str = 's', conv_kernel:int=3, in_patch_size:int=7, in_stride:int=4, in_padding=2):
