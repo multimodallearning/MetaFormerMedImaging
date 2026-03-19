@@ -14,6 +14,7 @@ from torchmetrics import classification, MetricCollection, MeanMetric
 from datasets.grazpedwri_dataset import SegGrazPedWriDataset
 from datasets.jsrt_dataset import JSRTDataset
 from datasets import tiger_dataset
+from datasets.abdomen_atlas_dataset import AbdomenAtlasDataModule
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -46,6 +47,12 @@ class SegmentatorBase(LightningModule):
             self.n_channels = 3
             self.n_classes = tiger_dataset.N_CLASSES
             self.label = tiger_dataset.LABELS
+            task = "multi-class"
+            self.has_background = True
+        elif ds_name.lower() == "abdomenatlas":
+            self.n_channels = 1
+            self.n_classes = len(AbdomenAtlasDataModule.CLASS_MAP) + 1
+            self.label = AbdomenAtlasDataModule.CLASS_MAP.values()
             task = "multi-class"
             self.has_background = True
         else:
