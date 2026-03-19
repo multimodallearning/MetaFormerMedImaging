@@ -25,6 +25,22 @@
 (#) even with reduced lr, training was instable -> disabled compilation, used half batch size and grad accumulation of 2
 (+) reduced batch size by factor 4 and use grad accumulation of 4
 
+| Token Mixer | Kernel Size | 
+|-------------|-------------|
+| pooling     | 3           |
+|             | 5           |
+| conv        | 3           |
+|             | 5           |
+| sep_conv    | 3           |
+|             | 5           |
+| locAttn     | 3           |
+|             | 5           |
+| fullAttn +  | -           |
+| random      | -           |
+| identity    | 1           |
+| ResNet18    | 3           |
+|             | 5           |
+
 ## MetaFormer [P, P, T, T]
 
 ### From Scratch
@@ -73,6 +89,7 @@ warm start = Reuse attention weights for self attention.
 | random                | -           | 0.8553, 0.9643, 0.8571 | 0.8994, 0.9744, 0.8969 | 0.7713, 0.9425, 0.781  | 0.9329, 0.9885, 0.9423 | 0.7687, 0.9404, 0.7732 |
 | identity              | 1           | 0.8597, 0.984, 0.8604  | 0.7985, 0.9511, 0.7792 | 0.8056, 0.9646, 0.8077 | 0.9291, 0.9911, 0.9402 | 0.7658, 0.9574, 0.7695 |
 | ResNet18              | 3           | 0.8968, 0.9875, 0.8989 | 0.8976, 0.9871, 0.89   | 0.8071, 0.9476, 0.8227 | 0.8974, 0.939, 0.9139  | 0.792, 0.9558, 0.7955  |
+| Rad DINO              | -           | 0.5164, 0.8272, 0.5152 | 0.8245, 0.9744, 0.8195 | 0.5473, 0.8164, 0.5696 | 0.9778, 0.9947, 0.9761 | 0.6657, 0.9219, 0.6742 |
 
 ## MetaFormer as Encoder for Semantic Segmentation
 
@@ -105,6 +122,7 @@ warm start = Reuse attention weights for self attention.
 |               | 5           | 0.9342, 7.1374 | 0.7864, 8.7964  | 0.5981, 540.7787          |
 |               | 7           | 0.9335, 8.3351 | 0.7629, 9.6254  | 0.6047, 499.9212          |
 |               | 9           | -              | -               | 0.5639, 549.7401          |
+| Rad DINO      | -           | 0.9351, 9.1754 | 0.4049, 34.2871 | 0.5125, 567.9857          |
 
 # Param Count
 

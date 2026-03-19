@@ -38,7 +38,6 @@ class TIGERDataModule(LightningDataModule):
         ]
 
     def setup(self, stage):
-        cache_rate = 0 if self.trainer.fast_dev_run else 1.0
         base = Path('data/tiger')
         train_data = (base / 'imagesTr').glob('*.png')
         train_data = [
@@ -56,7 +55,7 @@ class TIGERDataModule(LightningDataModule):
             lbl_ratio = (1 / LBL_CNT) ** 0.5
             lbl_ratio[0] = 0  # set probability for background to zero
 
-            self.train_ds = data.CacheDataset(train_data, cache_rate=cache_rate, num_workers=None,
+            self.train_ds = data.CacheDataset(train_data, num_workers=None,
                                               transform=transforms.Compose([
                                                   *self.base_transform,
                                                   transforms.RandAxisFlipd(['image', 'label'], 0.5),
@@ -70,7 +69,7 @@ class TIGERDataModule(LightningDataModule):
                                                   #                                    random_center=True),
                                               ]))
 
-            self.val_ds = data.CacheDataset(test_data, cache_rate=cache_rate, num_workers=None,
+            self.val_ds = data.CacheDataset(test_data, num_workers=None,
                                             transform=transforms.Compose([
                                                 *self.base_transform,
                                                 transforms.GridSplitD(['image', 'label'], (2, 2), self.spatial_size),
