@@ -10,7 +10,6 @@ from tqdm import tqdm
 
 from models.metaformer_classifier import AdaptiveMetaformerClassifier
 from models.pretrained_metaformer_classifier import PretrainedMetaformer
-from models.foundation_model import RadDinoClassifier
 
 
 def get_class_from_path(path: str):
