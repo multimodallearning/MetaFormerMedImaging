@@ -7,6 +7,7 @@ from architectures import poolformer as pf
 from architectures import metaformer as mf
 from architectures.flex_token_mixer import FlexFormer, FlexTokenMixer
 from models.classifier_base import ClassifierBase
+from architectures.random_token_mixer import RandomMixer
 
 
 def convert_conv2d_to_conv3d(conv: nn.Conv2d, **kwargs) -> nn.Conv3d:
@@ -85,7 +86,7 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
             setattr(parent, child_name, convert_conv2d_to_conv3d(conv))
         # reinit MLP convs like linear
         for module in filter(lambda m: isinstance(m, pf.Mlp), self.model.modules()):
-            module.apply(self._init_weights)
+            module.apply(self.init_weights)
 
         patch_size = torch.tensor([patch_size] * 3)
         embed_dim = self.model.patch_embed.proj.out_channels
@@ -141,6 +142,9 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
             elif tokenmixer == 'identity':
                 for l in range(len(blocks)):
                     blocks[l].token_mixer = nn.Identity()
+            elif tokenmixer == 'random':
+                for l in range(len(blocks)):
+                    blocks[l].token_mixer = RandomMixer(stage_patch_size.int().tolist())
             else:
                 raise ValueError(f'Unknown tokenmixer {tokenmixer}')
 
@@ -153,7 +157,7 @@ class AdaptiveMetaformerClassifier3D(ClassifierBase):
                 f'metaformer_{self.hparams.tokenmixer}_{self.hparams.ds_name} {self.hparams.kernel_size}³')
 
     @staticmethod
-    def _init_weights(m):
+    def init_weights(m):
         if isinstance(m, nn.Conv3d):
             trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
