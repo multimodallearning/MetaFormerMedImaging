@@ -123,7 +123,7 @@ if __name__ == '__main__':
     ds = AbdomenAtlasDataModule(use_data_aug=False)
     ds.setup('fit')
     print("Building training cache...")
-    for i in trange(len(ds.train_det_ds)):
-        _ = ds.train_det_ds[i]
+    for i in trange(len(ds.val_ds)):
+        _ = ds.val_ds[i]
 
     print("Cache ready!")
