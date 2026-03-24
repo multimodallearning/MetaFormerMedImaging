@@ -13,6 +13,7 @@ from datasets.jsrt_dataset import JSRTDataModule # noqa
 from datasets.tiger_dataset import TIGERDataModule # noqa
 from datasets.abdomen_atlas_dataset import AbdomenAtlasDataModule # noqa
 from models.poolformer_segmentor import MetaFormerSegmentator # noqa
+from models.poolformer_segmentor_3d import MetaFormerSegmentator3D # noqa
 from models.unet import UNetSegmentator, UNetSegmentator3D, UNetOnPatchEmbedding # noqa
 from models.foundation_model import RadDinoSegmentator # noqa
 

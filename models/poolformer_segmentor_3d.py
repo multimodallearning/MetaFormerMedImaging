@@ -14,9 +14,9 @@ from models.segmentator_base import SegmentatorBase
 
 
 class MetaFormerSegmentator3D(SegmentatorBase):
-    def __init__(self, ds_name: str, token_mixer:str, model_name: str = 'poolformer_s12', kernel_size: int = 3,
+    def __init__(self, ds_name: str, token_mixer: str, model_name: str = 'poolformer_s12', kernel_size: int = 3,
                  head_dim: int = 16, lr: float = 1e-3, drop_path: float = 0.1, use_slopes: bool = False,
-                 learn_pe: bool = False, decoder_latent_dim:int=256, patch_size:int=128):
+                 learn_pe: bool = False, decoder_latent_dim: int = 256, patch_size: int = 128):
         """
         Segmentation model with SegFormer decoder and MetaFormer encoder with definable token mixer.
         :param ds_name: dataset name. has to be jsrt, wristbone or tiger
@@ -69,7 +69,7 @@ class MetaFormerSegmentator3D(SegmentatorBase):
             match token_mixer:
                 case 'loc_attn':
                     assert head_dim >= 16, f"head_dim should be at least 16 for local attention, but is {head_dim}"
-                    num_heads = embed_dims // head_dim
+                    num_heads = embed_dims[0] // head_dim
                     if stage_patch_size.prod() >= 64:  # apply local self attention only when it is worth it
                         block_mask = FlexFormer.generate_block_mask3D(num_heads, kernel_size, stage_patch_size, 'cuda')
                     else:
@@ -130,13 +130,15 @@ class MetaFormerSegmentator3D(SegmentatorBase):
         if Task.current_task() is not None:
             model_name = self.hparams.model_name
             model_name = model_name.replace('pool', 'meta')
-            Task.current_task().set_name(f'{model_name}_{self.hparams.token_mixer}_{self.hparams.ds_name} {self.hparams.kernel_size}³')
+            Task.current_task().set_name(
+                f'{model_name}_{self.hparams.token_mixer}_{self.hparams.ds_name} {self.hparams.kernel_size}³')
+
 
 if __name__ == '__main__':
-    for mixer_name in ['pooling', 'conv', 'sep_conv', 'identity', 'random']:
-        m = MetaFormerSegmentator3D('jsrt', mixer_name)#.cuda()
+    for mixer_name in ['loc_attn', 'pooling', 'conv', 'sep_conv', 'identity', 'random']:
+        m = MetaFormerSegmentator3D('abdomenatlas', mixer_name, kernel_size=3, patch_size=128).cuda()
         print('\n', mixer_name)
         # print(m)
-        x = torch.randn(1, 1, 128, 128, 128)#.cuda()
+        x = torch.randn(2, 1, 128, 128, 128).cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')
