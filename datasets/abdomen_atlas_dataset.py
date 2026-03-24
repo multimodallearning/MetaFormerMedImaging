@@ -68,6 +68,7 @@ class AbdomenAtlasDataModule(LightningDataModule):
                 test_split.append(sample)
             else:
                 train_split.append(sample)
+        assert len(test_split) == len(test_ids) and len(list(base.iterdir())) == (len(test_split) + len(train_split))
         det_trans = transforms.Compose([*self.base_transforms])
         match stage:
             case 'fit':
@@ -122,8 +123,9 @@ if __name__ == '__main__':
 
     ds = AbdomenAtlasDataModule(use_data_aug=False)
     ds.setup('fit')
-    print("Building training cache...")
+    print("Building cache...")
     for i in trange(len(ds.val_ds)):
         _ = ds.val_ds[i]
-
+    for i in trange(len(ds.train_det_ds)):
+        _ = ds.train_det_ds[i]
     print("Cache ready!")
