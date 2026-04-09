@@ -25,10 +25,9 @@ def nanstd(o, dim, keepdim=False):
 
 
 def to_one_hot(x: torch.Tensor, c: int):
-    assert x.dim() == 4
     assert x.shape[1] == 1
     x = one_hot(x.long(), c)
-    x = x.squeeze(1).permute(0, 3, 1, 2)
+    x = x.squeeze(1).movedim(-1, 1)
     return x
 
 
@@ -76,6 +75,12 @@ elif dataset_name == 'SegGrazPedWriDataModule':
     transform = transforms.Compose([transforms.NormalizeIntensity(dataset.mean, dataset.std),
                                     transforms.ToDevice(device), transforms.ToTensor(track_meta=False)])
     inferer = inferers.SimpleInferer()
+elif dataset_name == 'AbdomenAtlasDataModule':
+    dataset = get_class_from_path(dataset_class)(8, param['Args/fit.data.init_args.patch_size'])
+    transform = transforms.ToDevice(device)  # preprocessing already done within dataset
+    inferer = inferers.SlidingWindowInferer(param['Args/fit.data.init_args.patch_size'], 1,
+                                            mode='gaussian', padding_mode='constant', device=device)
+    mask_background = True
 else:
     raise NotImplementedError(f'Datset class {dataset_class} not know.')
 dataset.setup('test')
