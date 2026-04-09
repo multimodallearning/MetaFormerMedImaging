@@ -70,18 +70,18 @@ class AbdomenAtlasDataModule(LightningDataModule):
                 train_split.append(sample)
         assert len(test_split) == len(test_ids) and len(list(base.iterdir())) == (len(test_split) + len(train_split))
         det_trans = transforms.Compose([*self.base_transforms])
+        self.test_det_ds = data.PersistentDataset(test_split, det_trans, cache_dir=cache / 'test')
         match stage:
             case 'fit':
                 self.train_det_ds = data.PersistentDataset(train_split, det_trans, cache_dir=cache / 'train')
                 self.train_ds = data.Dataset(self.train_det_ds,
                                              transform=transforms.RandSpatialCropD(keys=["image", "label"],
                                                                                    roi_size=self.patch_size))
-                self.val_ds = data.PersistentDataset(test_split, transforms.Compose([
-                    *self.base_transforms,
-                    transforms.CenterSpatialCropD(keys=["image", "label"], roi_size=self.patch_size)
-                ]), cache_dir=cache / 'test')
+                self.val_ds = data.Dataset(self.test_det_ds,
+                                           transform=transforms.CenterSpatialCropD(keys=["image", "label"],
+                                                                                   roi_size=self.patch_size))
             case 'test':
-                self.test_ds = data.Dataset(test_split, det_trans)
+                self.test_ds = self.test_det_ds
 
     def train_dataloader(self):
         return data.DataLoader(self.train_ds, shuffle=True, drop_last=True, **self.dl_kwargs)
@@ -90,8 +90,7 @@ class AbdomenAtlasDataModule(LightningDataModule):
         return data.DataLoader(self.val_ds, shuffle=True, drop_last=True, **self.dl_kwargs)
 
     def test_dataloader(self):
-        dl_kwargs = {**self.dl_kwargs, 'batch_size': 1}  # override batch size
-        return data.DataLoader(self.test_ds, drop_last=False, **dl_kwargs)
+        return data.DataLoader(self.test_ds, drop_last=False, batch_size=1, num_workers=0, pin_memory=False)
 
     def on_before_batch_transfer(self, batch, dataloader_idx):
         x, y = batch['image'], batch['label']
@@ -124,8 +123,8 @@ if __name__ == '__main__':
     ds = AbdomenAtlasDataModule(use_data_aug=False)
     ds.setup('fit')
     print("Building cache...")
-    for i in trange(len(ds.val_ds)):
-        _ = ds.val_ds[i]
+    for i in trange(len(ds.test_det_ds)):
+        _ = ds.test_det_ds[i]
     for i in trange(len(ds.train_det_ds)):
         _ = ds.train_det_ds[i]
     print("Cache ready!")
