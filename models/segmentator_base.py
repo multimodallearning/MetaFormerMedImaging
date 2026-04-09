@@ -77,7 +77,7 @@ class SegmentatorBase(LightningModule):
             "dsc": classification.F1Score(**metrics_kwargs),
         }, postfix='/train')
         self.val_metrics = self.train_metrics.clone(postfix='/val')
-        self.train_loss = MeanMetric()
+        self.train_loss = MeanMetric(nan_strategy='error')
         self.val_loss = MeanMetric()
 
         self.optim_hp = Namespace(lr=lr, wd=wd, warmup_epochs=warmup_epochs, min_lr=min_lr)
