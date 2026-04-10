@@ -48,7 +48,7 @@ class RadDinoSegmentator(SegmentatorBase):
         backbone_state_dict = utils.safetensors_to_state_dict("data/backbone_compatible.safetensors")
         self.encoder.load_state_dict(backbone_state_dict, strict=True)
         self.encoder.eval().requires_grad_(False)
-        self.decoder = SegformerDecoder([768] * 3, decoder_latent_dim)
+        self.decoder = SegformerDecoder([768] * 4, decoder_latent_dim)
         self.seg_head = nn.Conv2d(decoder_latent_dim, self.n_classes, kernel_size=1, bias=True)
 
         self.patch_size = (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
@@ -62,7 +62,7 @@ class RadDinoSegmentator(SegmentatorBase):
         if self.n_channels == 1:
             x = x.expand(-1, 3, -1, -1)
 
-        feats = self.encoder.get_intermediate_layers(x, [0, 1, 2], True, False, True)
+        feats = self.encoder.get_intermediate_layers(x, [8, 9, 10, 11], True, False, True)
         feats = self.decoder(feats)
         y_hat = self.seg_head(feats)
 
