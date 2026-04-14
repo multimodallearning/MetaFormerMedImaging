@@ -11,8 +11,8 @@ from models.classifier_base import ClassifierBase
 
 
 class AdaptiveMetaformerClassifier(ClassifierBase):
-    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5, lr:float=0.001,
-                 head_dim: int = 16, drop_path: float = 0.1, device: str = "cuda"):
+    def __init__(self, ds_name, tokenmixer: str, patch_size: int = 224, kernel_size: int = 5, lr: float = 0.001,
+                 head_dim: int = 16, drop_path: float = 0.1, device: str = "cuda", architecture:str="s12"):
         """
         MetaFormerS12 classifier with definable token mixer. Model always trained from scratch.
         Architecture signature: [T, T, T, T] where T is the token mixer.
@@ -24,10 +24,11 @@ class AdaptiveMetaformerClassifier(ClassifierBase):
         :param head_dim: embedding dimension of each head for attention based token mixers
         :param drop_path: stochastic depth rate
         :param device: specify device for creating block masks if local attention is used (needed for block mask creation in flex attention
+        :param architecture: variant of poolfomrer to build on
         """
         super().__init__(ds_name, lr)
         self.save_hyperparameters()
-        self.model = getattr(pf, "poolformer_s12")(pretrained=False)
+        self.model = getattr(pf, f"poolformer_{architecture}")(pretrained=False)
         assert self.is_2d, 'You try to apply a 2D model to a 3D dataset.'
 
         # adjust model to current dataset
@@ -108,10 +109,11 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    for mixer_name in ['full_attn', 'pooling', 'conv', 'sep_conv', 'identity']: #'loc_attn',
-        m = AdaptiveMetaformerClassifier('OrganSMNIST', mixer_name)#.cuda()
+    for mixer_name in ['full_attn', 'pooling', 'conv', 'sep_conv', 'identity']:  # 'loc_attn',
+        m = AdaptiveMetaformerClassifier('OrganSMNIST', mixer_name, architecture='s24')  # .cuda()
         print('\n', mixer_name)
-        # print(m)
-        x = torch.randn(2, 1, 224, 224)#.cuda()
+        print(m)
+        x = torch.randn(2, 1, 224, 224)  # .cuda()
         y = m(x)
         print(f'Output shape: {y.shape}\n')
+        break
