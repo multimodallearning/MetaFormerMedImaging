@@ -12,8 +12,7 @@ from eval import rank_utils
 n_bootstraps = 5000
 
 parser = argparse.ArgumentParser("Evaluate experiment")
-parser.add_argument("--signature", type=str, help="Architecture signature to evaluate [4T, 2P2T].", default='4T',
-                    required=False)
+parser.add_argument("signature", type=str, help="Architecture signature to evaluate [4T, 2P2T].")
 signature = parser.parse_args().signature.upper()
 print('Evaluating architecture signatur:', signature)
 
@@ -24,6 +23,9 @@ tm_names = list()
 df = dict()
 df_normalize = dict()
 for ds in ds_dirs:
+    if ds.name == 'imagewoof':
+        print('skip imagewoof')
+        continue
     y = torch.load(str(ds / 'gt.pth'), weights_only=True)
     n_classes = y.max().item() + 1  # including 0
     n_samples = len(y)
@@ -65,7 +67,8 @@ df_normalize = pd.DataFrame.from_dict(df_normalize)
 df_normalize.insert(0, 'TokenMixer', tm_names)
 df_normalize.set_index('TokenMixer', inplace=True)
 df_normalize['gmean'] = df_normalize.aggregate(gmean, 1)
-df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
+df_normalize['gmean'] = df_normalize['gmean'].round(3).astype(str)
+#df_normalize.sort_values(by='gmean', ascending=False, inplace=True)
 print(df_normalize.to_string())
 
 # save
