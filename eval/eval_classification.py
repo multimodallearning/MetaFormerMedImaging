@@ -109,5 +109,9 @@ file_name = '_'.join(file_name)
 
 base_path = Path('./eval/classification_predictions') / param['Args/fit.model.init_args.ds_name']
 base_path.mkdir(parents=True, exist_ok=True)
-torch.save(pred, base_path / (file_name + '.pth'))
-torch.save(gt, base_path / 'gt.pth')
+# disable saving for architecture others than s12
+if param['Args/fit.model.init_args.architecture'] and param['Args/fit.model.init_args.architecture'] != 's12':
+    print('Not saving results to .pth, because other than s12 variant.')
+else:
+    torch.save(pred, base_path / (file_name + '.pth'))
+    torch.save(gt, base_path / 'gt.pth')

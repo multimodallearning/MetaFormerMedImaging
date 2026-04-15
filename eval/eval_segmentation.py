@@ -130,8 +130,11 @@ except KeyError:
 
 print(task.name, kernel_size)
 
-# save instance DSC scores
-token_mixer = param['Args/fit.model.init_args.token_mixer']
-base_path = Path('./eval/dsc_scores') / dataset_name
-base_path.mkdir(parents=True, exist_ok=True)
-torch.save(dsc_values.nanmean(1), base_path / f'{token_mixer}_{kernel_size}.pth')
+# save instance DSC scores for s12 variants
+if param['Args/fit.model.init_args.model_name'] and param['Args/fit.model.init_args.model_name'] != 'poolformer_s12':
+    print('Not saving results to .pth, because other than s12 variant.')
+else:
+    token_mixer = param['Args/fit.model.init_args.token_mixer']
+    base_path = Path('./eval/dsc_scores') / dataset_name
+    base_path.mkdir(parents=True, exist_ok=True)
+    torch.save(dsc_values.nanmean(1), base_path / f'{token_mixer}_{kernel_size}.pth')
