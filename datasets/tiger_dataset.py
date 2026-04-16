@@ -77,6 +77,7 @@ class TIGERDataModule(LightningDataModule):
         elif stage == 'test':
             # skip padding
             self.test_ds = data.Dataset(test_data, transform=transforms.Compose(self.base_transform[:-1]))
+            self.test_ds.LABELS = ['background'] + LABELS
         else:
             raise ValueError(f'Unknown stage: {stage}')
 

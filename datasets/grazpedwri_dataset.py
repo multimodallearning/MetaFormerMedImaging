@@ -36,6 +36,7 @@ class SegGrazPedWriDataset(Dataset):
         'Ossa metacarpalia V',
         'Epiphyse Radius',
         'Epiphyse Ulna'])
+    LABELS = BONE_LABEL
     BONE_LABEL_MAPPING = {k: v for k, v in zip(BONE_LABEL, range(len(BONE_LABEL)))}
     N_CLASSES = len(BONE_LABEL)
     # BCE weights not including background
