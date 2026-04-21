@@ -51,7 +51,12 @@ pairs=(
     648 dermamnist
     972 pneumoniamnist
     324 organsmnist
+    3888 NoduleMNIST3D
 )
+
+# for 3D replace model with 3D variant
+# AdaptiveMetaformerClassifier3D
+# PretrainedMetaformer3D
 
 # MetaFormer [T, T, T, T] from scratch
 for ((i=0; i<${#pairs[@]}; i+=2)); do
@@ -102,6 +107,20 @@ for ((i=0; i<${#pairs[@]}; i+=2)); do
         --trainer.devices [0] \
         --trainer.max_epochs $e
 done
+
+# RAD DINO
+for ((i=0; i<${#pairs[@]}; i+=2)); do
+    e=${pairs[i]}
+    d=${pairs[i+1]}
+    python -m train_classifier fit \
+        --model RadDinoClassifier \
+        --model.ds_name $d \
+        --data MedMNISTDataModule \
+        --data.ds_name $d \
+        --trainer configs/base_trainer.yaml \
+        --trainer.devices [0] \
+        --trainer.max_epochs $e
+done
 ```
 
 To train on ImageWoof (a non-trivial subset of ImageNet):
@@ -114,6 +133,9 @@ do python -m train_classifier fit --model PretrainedMetaformer --model.ds_name i
 
 # ResNet Baseline
 do python -m train_classifier fit --model CNNClassifier --model.ds_name imagewoof --model.kernel_size $k --model.tokenmixer $t --model.pretrained false/true --data ImageWoofDataModule --trainer configs/base_trainer.yaml --trainer.devices [0]
+
+# RAD DINO
+python -m train_classifier fit --model RadDinoClassifier --model.ds_name imagewoof --data ImageWoofDataModule --trainer configs/base_trainer.yaml --trainer.devices [0]
 ```
 
 #### Segmentation
@@ -125,6 +147,9 @@ python -m train_segmentator fit --model MetaFormerSegmentator --model.ds_name wr
 
 # UNet Baselines: UNet and UNet on first MetaFormer's patch embedding to match its receptive field
 python -m train_segmentator fit --model UNetSegmentator/UNetOnPatchEmbedding --model.ds_name wristbone/jsrt --model.conv_kernel $k --data SegGrazPedWriDataModule/JSRTDataModule --trainer configs/base_trainer_seg.yaml --trainer.max_epochs 1000
+
+# RAD DINO
+python -m train_segmentator fit --model RadDinoSegmentator --model.ds_name wristbone/jsrt --data SegGrazPedWriDataModule/JSRTDataModule --trainer configs/base_trainer_seg.yaml --trainer.max_epochs 1000
 ```
 
 and on the TIGER dataset utilizing a patch-based approach with patch size 768x768:
@@ -134,7 +159,20 @@ python -m train_segmentator fit --model MetaFormerSegmentator --model.ds_name ti
 
 # UNet Baselines: UNet and UNet on first MetaFormer's patch embedding to match its receptive field
 python -m train_segmentator fit --model UNetSegmentator/UNetOnPatchEmbedding --model.ds_name tiger --model.conv_kernel $k --data TIGERDataModule --data.spatial_size 768 --trainer configs/base_trainer_seg.yaml --trainer.max_epochs 1000
+
+# RAD DINO
+python -m train_segmentator fit --model RadDinoSegmentator --model.ds_name tiger --data TIGERDataModule --data.spatial_size 768 --trainer configs/base_trainer_seg.yaml --trainer.max_epochs 1000
 ```
+
+and on the AbdomenAtlas dataset for a 3D setting:
+```bash
+# MetaFormer encoder [T, T, T, T] + SegFormer decoder
+python -m train_segmentator fit --model MetaFormerSegmentator3D --model.ds_name "$d"  --model.token_mixer "$t" --model.kernel_size "$k" --data AbdomenAtlasDataModule --trainer configs/base_trainer_seg.yaml --trainer.max_epochs "$e" --trainer.check_val_every_n_epoch 5
+
+# UNet Baseline
+python -m train_segmentator fit --model UNetSegmentator3D --model.ds_name "$d" --model.conv_kernel "$k" --data AbdomenAtlasDataModule --trainer configs/base_trainer_seg.yaml --trainer.max_epochs "$e" --trainer.check_val_every_n_epoch 5
+```
+
 
 ### Evaluation
 You can evaluate the classification and segmentation models on the respective test sets by providing their CLEAR-ML task id to the following commands:
@@ -182,3 +220,6 @@ the `SegGrazPedWriDataModule`.
 ### TIGER Dataset
 Please download the data from the [challenge website](https://tiger.grand-challenge.org/Data/).
 We limit our experiments to the subset WSIROIS since the come with dense annotations.
+
+### AbdomenAtlas 1.0
+Please download the data from its [repository](https://github.com/MrGiovanni/AbdomenAtlas).
