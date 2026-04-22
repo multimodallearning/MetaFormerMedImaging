@@ -15,18 +15,45 @@ df_tuples = pd.DataFrame({
 }, index=df_merge.index)
 df_tuples['gmean'] = df_rel['gmean'].round(3).astype(str)
 if experiment != 'seg': # reorder columns to match order of paper
-    df_tuples = df_tuples.iloc[:, [1, 3, 0, 4, 2, -1]]
+    df_tuples = df_tuples.iloc[:, [2, 0, 3, 1, 4]]
 
 print(df_tuples.to_string())
 print(df_tuples.to_latex())
 
-if experiment == "2P2T":
-    df_rel.reset_index(drop=False, inplace=True)
-    df_rel['TokenMixer'] = df_rel['TokenMixer'].apply(lambda t: '_'.join([t.rsplit('_', 2)[0], t.rsplit('_', 2)[-1], t.rsplit('_', 2)[-2]]))
-    df_rel.set_index('TokenMixer', inplace=True)
+def parse_index(idx):
+    prefix = experiment + "_"
 
-df_rel[['TokenMixer', 'Kernel']] = df_rel.index.to_series().str.rsplit('_', expand=True, n=1)
+    # Remove prefix if present
+    if idx.startswith(prefix):
+        rest = idx[len(prefix):]
+    else:
+        rest = idx
+
+    parts = rest.split("_")
+
+    # Last part is temp (warm/cold) or kernel
+    last = parts[-1]
+
+    if last in ['warm', 'cold']:
+        # Last is temperature, check for kernel before it
+        if len(parts) > 1 and parts[-2].isdigit():
+            token_mixer = "_".join(parts[:-2])
+            kernel = parts[-2]
+        else:
+            token_mixer = "_".join(parts[:-1])
+            kernel = ""
+    elif last.isdigit():
+        # Last is kernel
+        token_mixer = "_".join(parts[:-1])
+        kernel = last
+    else:
+        # Neither, so no kernel
+        token_mixer = "_".join(parts)
+        kernel = ""
+
+    return token_mixer, kernel
+
+df_rel['TokenMixer'], df_rel['Kernel'] = zip(*df_rel.index.map(parse_index))
 df_rel.reset_index(inplace=True, drop=True)
 print(df_rel.groupby('TokenMixer')['gmean'].mean().sort_values(ascending=False))
 print(df_rel.groupby('Kernel')['gmean'].mean().sort_values(ascending=False))
-
